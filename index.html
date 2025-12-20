@@ -13,160 +13,280 @@
         }
         
         body {
-            font-family: Arial, sans-serif;
-            background: #1a1a1a;
-            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
+            color: #f9fafb;
+            font-size: 18px;
+            line-height: 1.6;
         }
         
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 24px 20px 32px;
         }
         
         h1 {
             margin-bottom: 20px;
-            color: #00bfff;
+            color: #e5f3ff;
+            font-size: 30px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            text-shadow: 0 6px 18px rgba(0, 0, 0, 0.7);
         }
         
         .controls {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            background: rgba(15, 23, 42, 0.96);
+            padding: 16px 18px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+            border: 1px solid #1f2937;
         }
         
         .controls input {
-            width: 70%;
-            padding: 10px;
-            background: #1a1a1a;
-            border: 1px solid #444;
-            color: white;
-            border-radius: 4px;
-            font-size: 14px;
+            flex: 1 1 320px;
+            max-width: 100%;
+            padding: 10px 12px;
+            background: #020617;
+            border: 1px solid #4b5563;
+            color: #e5e7eb;
+            border-radius: 6px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+        }
+        
+        .controls input::placeholder {
+            color: #6b7280;
+        }
+        
+        .controls input:focus {
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.4);
+            background-color: #020a16;
         }
         
         .controls button {
-            padding: 10px 20px;
-            background: #00bfff;
+            padding: 12px 26px;
+            background: linear-gradient(135deg, #0ea5e9, #22c1c3);
             border: none;
-            color: white;
-            border-radius: 4px;
+            color: #0b1120;
+            border-radius: 999px;
             cursor: pointer;
-            font-size: 14px;
-            margin-left: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            margin-left: 4px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            box-shadow: 0 10px 25px rgba(14, 165, 233, 0.55);
+            transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+            white-space: nowrap;
         }
         
         .controls button:hover {
-            background: #0099cc;
+            background: linear-gradient(135deg, #38bdf8, #4ade80);
+            box-shadow: 0 14px 30px rgba(34, 197, 235, 0.75);
+            transform: translateY(-1px);
+        }
+        
+        .controls button:active {
+            transform: translateY(0);
+            box-shadow: 0 6px 18px rgba(15, 118, 110, 0.7);
         }
         
         .controls button:focus {
-            outline: 3px solid #00bfff;
+            outline: 2px solid #e0f2fe;
             outline-offset: 2px;
         }
         
         .status {
-            margin: 10px 0;
-            padding: 10px;
-            background: #333;
-            border-radius: 4px;
-            font-size: 14px;
+            margin: 10px 0 4px;
+            padding: 10px 12px;
+            background: linear-gradient(90deg, rgba(56, 189, 248, 0.12), rgba(15, 23, 42, 0.95));
+            border-radius: 8px;
+            font-size: 16px;
+            border: 1px solid #1f2937;
+            color: #e5f3ff;
         }
-                .error {
-            background: #ff4444;
-            color: white;
+        .error {
+            background: linear-gradient(90deg, rgba(248, 113, 113, 0.16), rgba(15, 23, 42, 0.95));
+            color: #fee2e2;
+            border-color: #7f1d1d;
         }
-                .categories {
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .settings-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 999px;
+            font-size: 18px;
+            line-height: 1;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.9);
+        }
+
+        .settings-panel {
+            margin-bottom: 12px;
+        }
+
+        .settings-panel-inner {
+            background: rgba(15, 23, 42, 0.96);
+            border-radius: 10px;
+            padding: 14px 16px 16px;
+            border: 1px solid #1f2937;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        .settings-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+        }
+
+        .mode-toggle {
             display: flex;
             gap: 10px;
-            flex-wrap: wrap;
-            margin: 20px 0;
+            margin: 14px 0 6px;
+        }
+
+        .mode-btn {
+            padding: 8px 18px;
+        }
+
+        .categories {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 8px;
+            margin: 18px 0 12px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding-bottom: 4px;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
         }
         
         .category-btn {
-            padding: 8px 16px;
-            background: #2a2a2a;
-            border: 2px solid #444;
-            color: white;
-            border-radius: 4px;
+            padding: 8px 20px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid #374151;
+            color: #e5e7eb;
+            border-radius: 999px;
             cursor: pointer;
             font-size: 14px;
-            transition: all 0.2s;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease, box-shadow 0.15s ease;
+            flex: 0 0 auto;
         }
         
         .category-btn:hover {
-            background: #333;
-            border-color: #00bfff;
+            background: #111827;
+            border-color: #0ea5e9;
+            box-shadow: 0 6px 16px rgba(15, 118, 110, 0.65);
+            transform: translateY(-1px);
         }
         
         .category-btn:focus {
             outline: none;
-            background: #00bfff;
-            border-color: #00bfff;
+            background: #0ea5e9;
+            border-color: #e0f2fe;
+            color: #02131f;
             transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(0, 191, 255, 0.5);
+            box-shadow: 0 0 0 2px rgba(148, 231, 255, 0.9), 0 10px 26px rgba(14, 165, 233, 0.75);
         }
         
         .category-btn.active {
-            background: #00bfff;
-            border-color: #00bfff;
+            background: #0ea5e9;
+            border-color: #38bdf8;
+            color: #02131f;
         }
         
         .channel-grid {
-            margin-top: 20px;
+            margin-top: 18px;
         }
         
         .channel-group-section {
-            margin-bottom: 30px;
+            margin-bottom: 26px;
         }
         
         .group-header {
-            font-size: 20px;
-            font-weight: bold;
-            color: #00bfff;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #444;
+            font-size: 15px;
+            font-weight: 600;
+            color: #9beafe;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #1f2937;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
         }
         
         .group-channels {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+            align-items: stretch;
         }
         
         .channel-card {
-            background: #2a2a2a;
-            padding: 15px;
-            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.9));
+            padding: 14px 16px;
+            border-radius: 10px;
             cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.2s;
+            border: 1px solid #020617;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65);
+            transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 70px;
         }
         
         .channel-card:hover {
-            background: #333;
-            border-color: #00bfff;
+            background: linear-gradient(135deg, #020617, #0f172a);
+            border-color: #0ea5e9;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.9);
+            transform: translateY(-1px);
         }
         
         .channel-card:focus {
             outline: none;
-            border-color: #00bfff;
-            background: #00bfff;
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+            border-color: #e0f2fe;
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.35), rgba(15, 23, 42, 0.98));
+            transform: scale(1.03);
+            box-shadow: 0 0 0 2px rgba(148, 231, 255, 0.9), 0 20px 40px rgba(15, 23, 42, 0.95);
         }
         
         .channel-name {
-            font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 18px;
+            color: #f9fafb;
         }
         
         .channel-group {
-            color: #888;
-            font-size: 12px;
+            color: #9ca3af;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
         }
         
         #player-container {
@@ -186,21 +306,28 @@
         }
         
         .player-header {
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
+            background: linear-gradient(90deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.9));
+            padding: 14px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid #020617;
+            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.85);
         }
         
         #close-player {
-            padding: 10px 20px;
-            background: #ff4444;
+            padding: 9px 18px;
+            background: linear-gradient(135deg, #f97373, #ef4444);
             border: none;
-            color: white;
-            border-radius: 4px;
+            color: #fef2f2;
+            border-radius: 999px;
             cursor: pointer;
             font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            box-shadow: 0 10px 26px rgba(185, 28, 28, 0.85);
+            transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
         }
         
         #video-player {
@@ -219,28 +346,126 @@
             font-size: 12px;
             font-family: monospace;
         }
+        
+        .env-info {
+            margin-top: 10px;
+            padding: 8px;
+            background: #222;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: monospace;
+            color: #aaa;
+            word-break: break-all;
+        }
+
+        .progress-container {
+            margin: 6px 0 2px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            overflow: hidden;
+            border: 1px solid #0f172a;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #0ea5e9, #22c55e);
+            box-shadow: 0 0 10px rgba(34, 197, 235, 0.65);
+            transition: width 0.18s ease-out;
+        }
+
+        .landing {
+            margin-top: 32px;
+            padding: 32px 26px 30px;
+            border-radius: 14px;
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), rgba(15, 23, 42, 0.96));
+            border: 1px solid rgba(15, 23, 42, 0.95);
+            box-shadow: 0 26px 70px rgba(15, 23, 42, 0.95);
+        }
+
+        .landing-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #e5f3ff;
+        }
+
+        .landing-subtitle {
+            font-size: 16px;
+            color: #cbd5f5;
+            margin-bottom: 18px;
+        }
+
+        .landing-steps {
+            font-size: 15px;
+            color: #cbd5f5;
+            margin-bottom: 18px;
+        }
+
+        .landing-steps li {
+            margin-bottom: 4px;
+        }
+
+        .landing-hint {
+            font-size: 13px;
+            color: #9ca3af;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Simple IPTV Test App</h1>
-        
-        <div class="controls">
-            <input 
-                type="text" 
-                id="m3u-url" 
-                placeholder="Enter M3U URL"
-                value="https://scoasttech.net:2096/get.php?username=shane.wilson.75@gmail.com&password=CV7OJYb6jV&type=m3u_plus&output=ts"
-            />
-            <button id="load-btn" tabindex="0">Load Playlist</button>
-            <button id="clear-btn" tabindex="0">Clear Cache</button>
+    <div class="container" role="main">
+        <div class="app-header">
+            <h1>Simple IPTV Test App</h1>
+            <button id="settings-btn" class="category-btn settings-btn" tabindex="0" aria-label="Settings">⚙</button>
+        </div>
+
+        <div class="settings-panel" id="settings-panel" hidden>
+            <div class="settings-panel-inner">
+                <h2 class="settings-title">Settings</h2>
+                <div class="controls">
+                    <input 
+                        type="text" 
+                        id="m3u-url" 
+                        placeholder="Enter M3U URL"
+                        value="https://scoasttech.net:2096/get.php?username=shane.wilson.75@gmail.com&password=CV7OJYb6jV&type=m3u_plus&output=ts"
+                    />
+                    <button id="load-btn" tabindex="0">Load Playlist</button>
+                    <button id="clear-btn" tabindex="0">Clear Cache</button>
+                </div>
+                <div class="env-info" id="env-info"></div>
+            </div>
         </div>
         
-        <div class="status" id="status">Ready. Click "Load Playlist" to import channels.</div>
+        <div class="status" id="status" aria-live="polite">Ready. Click "Load Playlist" to import channels.</div>
+        <div class="progress-container" id="import-progress" style="display:none;">
+            <div class="progress-bar" id="import-progress-bar"></div>
+        </div>
+
+        <div class="mode-toggle" id="mode-toggle" aria-label="Content type">
+            <button id="mode-live" class="category-btn mode-btn active" tabindex="0">Live TV</button>
+            <button id="mode-vod" class="category-btn mode-btn" tabindex="0">VOD</button>
+        </div>
+
+        <div class="landing" id="landing">
+            <h2 class="landing-title">Your channels, one click away</h2>
+            <p class="landing-subtitle">Press the settings gear to import your IPTV playlist, then browse channels by category using your remote.</p>
+            <ul class="landing-steps">
+                <li>1. Open <strong>Settings</strong> (⚙) in the top-right.</li>
+                <li>2. Paste or confirm your M3U playlist URL.</li>
+                <li>3. Choose <strong>Load Playlist</strong> and start watching.</li>
+            </ul>
+            <p class="landing-hint">Tip: Use arrow keys and OK to navigate. Back closes the player and settings.</p>
+        </div>
         
-        <div class="categories" id="categories"></div>
+        <div class="categories" id="categories" style="display:none;" aria-label="Channel categories"></div>
         
-        <div class="channel-grid" id="channel-grid"></div>
+        <div class="channel-grid" id="channel-grid" style="display:none;"></div>
     </div>
     
     <div id="player-container">
@@ -256,14 +481,51 @@
         let channels = [];
         let hls = null;
         let selectedCategory = 'All';
+        let currentMode = 'live'; // 'live' or 'vod'
         
+        function detectChannelType(name, group) {
+            const text = ((name || '') + ' ' + (group || '')).toLowerCase();
+            if (
+                text.indexOf('vod') !== -1 ||
+                text.indexOf('video on demand') !== -1 ||
+                text.indexOf('on demand') !== -1 ||
+                text.indexOf('movie') !== -1 ||
+                text.indexOf('series') !== -1
+            ) {
+                return 'vod';
+            }
+            return 'live';
+        }
+
+        function normalizeChannelTypes(list) {
+            if (!Array.isArray(list)) return [];
+            for (let i = 0; i < list.length; i++) {
+                const ch = list[i];
+                if (!ch.type) {
+                    ch.type = detectChannelType(ch.name, ch.group);
+                }
+            }
+            return list;
+        }
+
+        function getChannelsForCurrentMode() {
+            if (!Array.isArray(channels)) return [];
+            if (currentMode === 'vod') {
+                return channels.filter(ch => ch.type === 'vod');
+            }
+            // Treat missing/unknown type as live by default
+            return channels.filter(ch => ch.type !== 'vod');
+        }
+
         // Load channels from localStorage
         function loadFromCache() {
             const cached = localStorage.getItem('simple-iptv-channels');
             if (cached) {
                 try {
                     channels = JSON.parse(cached);
+                    channels = normalizeChannelTypes(channels);
                     renderChannels();
+                    renderCategories();
                     updateStatus(`Loaded ${channels.length} channels from cache`);
                 } catch (e) {
                     console.error('Cache corrupted:', e);
@@ -286,10 +548,14 @@
                     const logoMatch = line.match(/tvg-logo="([^"]+)"/);
                     const groupMatch = line.match(/group-title="([^"]+)"/);
                     
+                    const name = nameMatch ? (nameMatch[1] || 'Unknown') : 'Unknown';
+                    const group = groupMatch ? groupMatch[1] : 'General';
+
                     currentChannel = {
-                        name: nameMatch ? (nameMatch[1] || 'Unknown') : 'Unknown',
+                        name: name,
                         // Don't store logos to save space
-                        group: groupMatch ? groupMatch[1] : 'General'
+                        group: group,
+                        type: detectChannelType(name, group)
                     };
                 } else if (line && !line.startsWith('#') && currentChannel) {
                     currentChannel.url = line;
@@ -316,13 +582,26 @@
             }
             
             updateStatus('Loading playlist...');
+            startProgress();
+            updateProgress(10);
             
             try {
-                const response = await fetch(url);
+                // When running in a browser on localhost, use the Node server proxy
+                let fetchUrl = url;
+                const host = (window.location && window.location.hostname) || '';
+                if (host === 'localhost' || host === '127.0.0.1') {
+                    fetchUrl = `/proxy?url=${encodeURIComponent(url)}`;
+                }
+
+                const response = await fetch(fetchUrl);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
+
+                updateProgress(35);
                 const content = await response.text();
+
+                updateProgress(60);
                 channels = parseM3U(content);
+                channels = normalizeChannelTypes(channels);
                 
                 if (channels.length === 0) {
                     throw new Error('No channels found in playlist');
@@ -346,23 +625,68 @@
                     }
                 }
                 
+                updateProgress(85);
                 renderChannels();
                 renderCategories();
+                updateProgress(100);
                 updateStatus(`Loaded ${channels.length} channels successfully`);
+                finishProgress();
             } catch (error) {
                 updateStatus(`Error: ${error.message}`);
                 console.error(error);
+                finishProgress(true);
             }
+        }
+
+        function startProgress() {
+            const container = document.getElementById('import-progress');
+            const bar = document.getElementById('import-progress-bar');
+            if (!container || !bar) return;
+            bar.style.width = '0%';
+            container.style.display = 'block';
+        }
+
+        function updateProgress(value) {
+            const bar = document.getElementById('import-progress-bar');
+            if (!bar) return;
+            const clamped = Math.max(0, Math.min(100, value));
+            bar.style.width = clamped + '%';
+        }
+
+        function finishProgress(isError) {
+            const container = document.getElementById('import-progress');
+            if (!container) return;
+            if (!isError) {
+                updateProgress(100);
+            }
+            setTimeout(() => {
+                container.style.display = 'none';
+            }, 600);
         }
         
         // Render channel grid
         function renderChannels() {
             const grid = document.getElementById('channel-grid');
+            const landing = document.getElementById('landing');
+            const categoriesEl = document.getElementById('categories');
+
+            if (!channels || channels.length === 0) {
+                if (grid) grid.style.display = 'none';
+                if (categoriesEl) categoriesEl.style.display = 'none';
+                if (landing) landing.style.display = 'block';
+                grid.innerHTML = '';
+                return;
+            }
+
+            if (landing) landing.style.display = 'none';
+            if (grid) grid.style.display = 'block';
+            if (categoriesEl) categoriesEl.style.display = 'flex';
             grid.innerHTML = '';
             
+            const base = getChannelsForCurrentMode();
             const filtered = selectedCategory === 'All' 
-                ? channels 
-                : channels.filter(ch => ch.group === selectedCategory);
+                ? base 
+                : base.filter(ch => ch.group === selectedCategory);
             
             if (filtered.length === 0) {
                 grid.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">No channels in this category</div>';
@@ -400,6 +724,8 @@
                         const card = document.createElement('div');
                         card.className = 'channel-card';
                         card.tabIndex = 0;
+                        card.setAttribute('role', 'button');
+                        card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
                         card.innerHTML = `
                             <div class="channel-name">${escapeHtml(channel.name)}</div>
                             <div class="channel-group">${escapeHtml(channel.group)}</div>
@@ -423,6 +749,8 @@
                     const card = document.createElement('div');
                     card.className = 'channel-card';
                     card.tabIndex = 0;
+                    card.setAttribute('role', 'button');
+                    card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
                     card.innerHTML = `
                         <div class="channel-name">${escapeHtml(channel.name)}</div>
                         <div class="channel-group">${escapeHtml(channel.group)}</div>
@@ -441,24 +769,63 @@
         // Render category buttons
         function renderCategories() {
             const container = document.getElementById('categories');
+            if (!container) return;
             container.innerHTML = '';
+
+            const base = getChannelsForCurrentMode();
+            if (!base || base.length === 0) {
+                return;
+            }
             
-            // Get unique categories
-            const categories = ['All', ...new Set(channels.map(ch => ch.group).sort())];
+            // Get unique categories for current mode
+            const categorySet = {};
+            for (let i = 0; i < base.length; i++) {
+                const g = base[i].group || 'General';
+                categorySet[g] = true;
+            }
+            const groups = Object.keys(categorySet).sort();
+            const categories = ['All'].concat(groups);
             
             categories.forEach(category => {
                 const btn = document.createElement('button');
                 btn.className = 'category-btn' + (category === selectedCategory ? ' active' : '');
-                btn.textContent = `${category} (${category === 'All' ? channels.length : channels.filter(ch => ch.group === category).length})`;
+                const count = category === 'All'
+                    ? base.length
+                    : base.filter(ch => ch.group === category).length;
+                btn.textContent = `${category} (${count})`;
                 btn.tabIndex = 0;
                 btn.onclick = () => {
                     selectedCategory = category;
                     renderCategories();
                     renderChannels();
-                    updateStatus(`Showing ${category} channels`);
+                    updateStatus(`Showing ${category} ${currentMode === 'vod' ? 'VOD' : 'Live TV'} channels`);
                 };
                 container.appendChild(btn);
             });
+        }
+
+        function setMode(mode) {
+            if (mode !== 'live' && mode !== 'vod') return;
+            if (currentMode === mode) return;
+            currentMode = mode;
+
+            const liveBtn = document.getElementById('mode-live');
+            const vodBtn = document.getElementById('mode-vod');
+            if (liveBtn && vodBtn) {
+                if (mode === 'live') {
+                    liveBtn.classList.add('active');
+                    vodBtn.classList.remove('active');
+                } else {
+                    vodBtn.classList.add('active');
+                    liveBtn.classList.remove('active');
+                }
+            }
+
+            // Reset category to All when switching modes to avoid empty views
+            selectedCategory = 'All';
+            renderCategories();
+            renderChannels();
+            updateStatus(`Showing ${mode === 'vod' ? 'VOD' : 'Live TV'} channels`);
         }
         
         // Play channel
@@ -568,6 +935,31 @@
         function updateStatus(message) {
             document.getElementById('status').textContent = message;
         }
+
+        // Show environment info (user agent and HLS capabilities)
+        function showEnvironmentInfo() {
+            const infoEl = document.getElementById('env-info');
+            if (!infoEl) return;
+            
+            const ua = navigator.userAgent || 'Unknown';
+            const tempVideo = document.createElement('video');
+            const hlsJsSupported = typeof Hls !== 'undefined' && Hls.isSupported && Hls.isSupported();
+            const nativeHls = !!(
+                tempVideo.canPlayType && (
+                    tempVideo.canPlayType('application/vnd.apple.mpegurl') ||
+                    tempVideo.canPlayType('application/x-mpegURL')
+                )
+            );
+            
+            const lines = [
+                `UA: ${ua}`,
+                `Hls.js supported: ${hlsJsSupported}`,
+                `Native HLS support: ${nativeHls}`
+            ];
+            
+            console.log('Environment info:', { ua, hlsJsSupported, nativeHls });
+            infoEl.innerHTML = lines.map(line => escapeHtml(line)).join('<br>');
+        }
         
         // Escape HTML
         function escapeHtml(text) {
@@ -585,22 +977,55 @@
             renderCategories();
             updateStatus('Cache cleared');
         }
+
+        // Settings toggle
+        function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            if (!panel) return;
+            const isHidden = panel.hasAttribute('hidden');
+            if (isHidden) {
+                panel.removeAttribute('hidden');
+                const input = document.getElementById('m3u-url');
+                if (input) {
+                    input.focus();
+                }
+            } else {
+                panel.setAttribute('hidden', 'hidden');
+            }
+        }
         
         // Event listeners
         document.getElementById('load-btn').onclick = loadPlaylist;
         document.getElementById('clear-btn').onclick = clearCache;
         document.getElementById('close-player').onclick = closePlayer;
+        document.getElementById('settings-btn').onclick = toggleSettings;
+
+        const modeLiveBtn = document.getElementById('mode-live');
+        const modeVodBtn = document.getElementById('mode-vod');
+        if (modeLiveBtn) {
+            modeLiveBtn.onclick = () => setMode('live');
+        }
+        if (modeVodBtn) {
+            modeVodBtn.onclick = () => setMode('vod');
+        }
         
         // Remote control navigation
         document.addEventListener('keydown', (e) => {
             const playerContainer = document.getElementById('player-container');
             const isPlayerActive = playerContainer.classList.contains('active');
+            const settingsPanel = document.getElementById('settings-panel');
+            const isSettingsOpen = settingsPanel && !settingsPanel.hasAttribute('hidden');
             
-            // Back button - Exit player
+            // Back button - Exit player or close settings
             if (e.key === 'Escape' || e.key === 'Backspace' || e.keyCode === 461) {
                 if (isPlayerActive) {
                     e.preventDefault();
                     closePlayer();
+                    return;
+                }
+                if (isSettingsOpen) {
+                    e.preventDefault();
+                    toggleSettings();
                 }
                 return;
             }
@@ -674,7 +1099,8 @@
             }
         });
         
-        // Load cached channels on startup
+        // Load cached channels on startup and show environment info
+        showEnvironmentInfo();
         loadFromCache();
         
         console.log('Simple IPTV Test App Ready');
