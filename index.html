@@ -1069,14 +1069,15 @@
             
             // Back button - Exit player or close settings
             if (e.key === 'Escape' || e.key === 'Backspace' || e.keyCode === 461) {
+                e.preventDefault();
+                e.stopPropagation();
                 if (isPlayerActive) {
-                    e.preventDefault();
                     closePlayer();
                     return;
                 }
                 if (isSettingsOpen) {
-                    e.preventDefault();
                     toggleSettings();
+                    return;
                 }
                 return;
             }
