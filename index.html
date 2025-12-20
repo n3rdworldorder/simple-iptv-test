@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple IPTV Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            color: #00bfff;
+        }
+        
+        .controls {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .controls input {
+            width: 70%;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .controls button {
+            padding: 10px 20px;
+            background: #00bfff;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .controls button:hover {
+            background: #0099cc;
+        }
+        
+        .controls button:focus {
+            outline: 3px solid #00bfff;
+            outline-offset: 2px;
+        }
+        
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+                .error {
+            background: #ff4444;
+            color: white;
+        }
+                .categories {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        
+        .category-btn {
+            padding: 8px 16px;
+            background: #2a2a2a;
+            border: 2px solid #444;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .category-btn:hover {
+            background: #333;
+            border-color: #00bfff;
+        }
+        
+        .category-btn:focus {
+            outline: none;
+            background: #00bfff;
+            border-color: #00bfff;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 191, 255, 0.5);
+        }
+        
+        .category-btn.active {
+            background: #00bfff;
+            border-color: #00bfff;
+        }
+        
+        .channel-grid {
+            margin-top: 20px;
+        }
+        
+        .channel-group-section {
+            margin-bottom: 30px;
+        }
+        
+        .group-header {
+            font-size: 20px;
+            font-weight: bold;
+            color: #00bfff;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #444;
+        }
+        
+        .group-channels {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .channel-card {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .channel-card:hover {
+            background: #333;
+            border-color: #00bfff;
+        }
+        
+        .channel-card:focus {
+            outline: none;
+            border-color: #00bfff;
+            background: #00bfff;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+        }
+        
+        .channel-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .channel-group {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        #player-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: black;
+            z-index: 1000;
+        }
+        
+        #player-container.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .player-header {
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        #close-player {
+            padding: 10px 20px;
+            background: #ff4444;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        #video-player {
+            flex: 1;
+            width: 100%;
+            background: black;
+        }
+        
+        .video-info {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Simple IPTV Test App</h1>
+        
+        <div class="controls">
+            <input 
+                type="text" 
+                id="m3u-url" 
+                placeholder="Enter M3U URL"
+                value="https://scoasttech.net:2096/get.php?username=shane.wilson.75@gmail.com&password=CV7OJYb6jV&type=m3u_plus&output=ts"
+            />
+            <button id="load-btn" tabindex="0">Load Playlist</button>
+            <button id="clear-btn" tabindex="0">Clear Cache</button>
+        </div>
+        
+        <div class="status" id="status">Ready. Click "Load Playlist" to import channels.</div>
+        
+        <div class="categories" id="categories"></div>
+        
+        <div class="channel-grid" id="channel-grid"></div>
+    </div>
+    
+    <div id="player-container">
+        <div class="player-header">
+            <h2 id="player-title">Channel</h2>
+            <button id="close-player" tabindex="0">Close (Press Back)</button>
+        </div>
+        <div class="video-info" id="video-info">Loading...</div>
+        <video id="video-player" controls autoplay></video>
+    </div>
+
+    <script>
+        let channels = [];
+        let hls = null;
+        let selectedCategory = 'All';
+        
+        // Load channels from localStorage
+        function loadFromCache() {
+            const cached = localStorage.getItem('simple-iptv-channels');
+            if (cached) {
+                try {
+                    channels = JSON.parse(cached);
+                    renderChannels();
+                    updateStatus(`Loaded ${channels.length} channels from cache`);
+                } catch (e) {
+                    console.error('Cache corrupted:', e);
+                    localStorage.clear();
+                }
+            }
+        }
+        
+        // Parse M3U content
+        function parseM3U(content, maxChannels = 1000) {
+            const lines = content.split('\n');
+            const parsed = [];
+            let currentChannel = null;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                if (line.startsWith('#EXTINF:')) {
+                    const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
+                    const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+                    const groupMatch = line.match(/group-title="([^"]+)"/);
+                    
+                    currentChannel = {
+                        name: nameMatch ? (nameMatch[1] || 'Unknown') : 'Unknown',
+                        // Don't store logos to save space
+                        group: groupMatch ? groupMatch[1] : 'General'
+                    };
+                } else if (line && !line.startsWith('#') && currentChannel) {
+                    currentChannel.url = line;
+                    parsed.push(currentChannel);
+                    currentChannel = null;
+                    
+                    // Limit channels to prevent quota errors
+                    if (parsed.length >= maxChannels) {
+                        console.log(`Limiting to ${maxChannels} channels to save storage`);
+                        break;
+                    }
+                }
+            }
+            
+            return parsed;
+        }
+        
+        // Load M3U from URL
+        async function loadPlaylist() {
+            const url = document.getElementById('m3u-url').value;
+            if (!url) {
+                updateStatus('Error: Please enter a URL');
+                return;
+            }
+            
+            updateStatus('Loading playlist...');
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const content = await response.text();
+                channels = parseM3U(content);
+                
+                if (channels.length === 0) {
+                    throw new Error('No channels found in playlist');
+                }
+                
+                // Try to save to localStorage with quota handling
+                try {
+                    localStorage.setItem('simple-iptv-channels', JSON.stringify(channels));
+                } catch (e) {
+                    if (e.name === 'QuotaExceededError') {
+                        updateStatus(`Warning: Storage quota exceeded. Using first 500 channels.`);
+                        channels = channels.slice(0, 500);
+                        try {
+                            localStorage.setItem('simple-iptv-channels', JSON.stringify(channels));
+                        } catch (e2) {
+                            updateStatus(`Error: Cannot store channels. Storage full.`);
+                            // Don't save, just display
+                        }
+                    } else {
+                        throw e;
+                    }
+                }
+                
+                renderChannels();
+                renderCategories();
+                updateStatus(`Loaded ${channels.length} channels successfully`);
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`);
+                console.error(error);
+            }
+        }
+        
+        // Render channel grid
+        function renderChannels() {
+            const grid = document.getElementById('channel-grid');
+            grid.innerHTML = '';
+            
+            const filtered = selectedCategory === 'All' 
+                ? channels 
+                : channels.filter(ch => ch.group === selectedCategory);
+            
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">No channels in this category</div>';
+                return;
+            }
+            
+            // When "All" is selected, group channels by category
+            if (selectedCategory === 'All') {
+                // Group channels by category
+                const groupedChannels = {};
+                filtered.forEach(channel => {
+                    if (!groupedChannels[channel.group]) {
+                        groupedChannels[channel.group] = [];
+                    }
+                    groupedChannels[channel.group].push(channel);
+                });
+                
+                // Sort group names
+                const sortedGroups = Object.keys(groupedChannels).sort();
+                
+                // Render each group
+                sortedGroups.forEach(groupName => {
+                    const section = document.createElement('div');
+                    section.className = 'channel-group-section';
+                    
+                    const header = document.createElement('div');
+                    header.className = 'group-header';
+                    header.textContent = `${groupName} (${groupedChannels[groupName].length})`;
+                    section.appendChild(header);
+                    
+                    const groupGrid = document.createElement('div');
+                    groupGrid.className = 'group-channels';
+                    
+                    groupedChannels[groupName].forEach(channel => {
+                        const card = document.createElement('div');
+                        card.className = 'channel-card';
+                        card.tabIndex = 0;
+                        card.innerHTML = `
+                            <div class="channel-name">${escapeHtml(channel.name)}</div>
+                            <div class="channel-group">${escapeHtml(channel.group)}</div>
+                        `;
+                        card.onclick = () => playChannel(channel);
+                        card.onkeydown = (e) => {
+                            if (e.key === 'Enter') playChannel(channel);
+                        };
+                        groupGrid.appendChild(card);
+                    });
+                    
+                    section.appendChild(groupGrid);
+                    grid.appendChild(section);
+                });
+            } else {
+                // Single category view - no grouping needed
+                const groupGrid = document.createElement('div');
+                groupGrid.className = 'group-channels';
+                
+                filtered.forEach((channel, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'channel-card';
+                    card.tabIndex = 0;
+                    card.innerHTML = `
+                        <div class="channel-name">${escapeHtml(channel.name)}</div>
+                        <div class="channel-group">${escapeHtml(channel.group)}</div>
+                    `;
+                    card.onclick = () => playChannel(channel);
+                    card.onkeydown = (e) => {
+                        if (e.key === 'Enter') playChannel(channel);
+                    };
+                    groupGrid.appendChild(card);
+                });
+                
+                grid.appendChild(groupGrid);
+            }
+        }
+        
+        // Render category buttons
+        function renderCategories() {
+            const container = document.getElementById('categories');
+            container.innerHTML = '';
+            
+            // Get unique categories
+            const categories = ['All', ...new Set(channels.map(ch => ch.group).sort())];
+            
+            categories.forEach(category => {
+                const btn = document.createElement('button');
+                btn.className = 'category-btn' + (category === selectedCategory ? ' active' : '');
+                btn.textContent = `${category} (${category === 'All' ? channels.length : channels.filter(ch => ch.group === category).length})`;
+                btn.tabIndex = 0;
+                btn.onclick = () => {
+                    selectedCategory = category;
+                    renderCategories();
+                    renderChannels();
+                    updateStatus(`Showing ${category} channels`);
+                };
+                container.appendChild(btn);
+            });
+        }
+        
+        // Play channel
+        function playChannel(channel) {
+            const playerContainer = document.getElementById('player-container');
+            const video = document.getElementById('video-player');
+            const title = document.getElementById('player-title');
+            
+            console.log('Playing channel:', channel.name, 'URL:', channel.url);
+            
+            playerContainer.classList.add('active');
+            title.textContent = channel.name;
+            
+            // Clean up previous HLS instance
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            
+            video.src = '';
+            video.load();
+            
+            // Play stream
+            const streamUrl = channel.url;
+            const isHLS = streamUrl.includes('.m3u8') || streamUrl.includes('m3u8');
+            
+            console.log('Stream type:', isHLS ? 'HLS' : 'Direct', 'HLS.isSupported:', Hls.isSupported());
+            
+            if (isHLS && Hls.isSupported()) {
+                console.log('Using HLS.js');
+                hls = new Hls({
+                    enableWorker: false,
+                    backBufferLength: 30,
+                    maxBufferLength: 30,
+                    debug: false
+                });
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    console.log('Manifest parsed, starting playback');
+                    video.play().catch(e => console.error('Play failed:', e));
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.error('HLS Error:', data.type, data.details);
+                    if (data.fatal) {
+                        console.error('Fatal error:', data);
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log('Network error, trying to recover...');
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log('Media error, trying to recover...');
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.error('Cannot recover from error');
+                                updateStatus(`Error: ${data.details}`);
+                                break;
+                        }
+                    }
+                });
+                
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                console.log('Using native HLS');
+                video.src = streamUrl;
+                video.play().catch(e => console.error('Play failed:', e));
+            } else {
+                console.log('Direct video playback');
+                video.src = streamUrl;
+                video.play().catch(e => console.error('Play failed:', e));
+            }
+            
+            video.onerror = (e) => {
+                console.error('Video error:', e, 'Network state:', video.networkState, 'Ready state:', video.readyState);
+                updateStatus(`Video error: ${video.error ? video.error.message : 'Unknown'}`);
+            };
+            
+            video.onloadedmetadata = () => {
+                console.log('Video metadata loaded:', video.videoWidth, 'x', video.videoHeight);
+            };
+            
+            video.oncanplay = () => {
+                console.log('Video can play');
+            };
+            
+            updateStatus(`Playing: ${channel.name}`);
+        }
+        
+        // Close player
+        function closePlayer() {
+            const playerContainer = document.getElementById('player-container');
+            const video = document.getElementById('video-player');
+            
+            playerContainer.classList.remove('active');
+            video.pause();
+            
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+        }
+        
+        // Update status
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Clear cache
+        function clearCache() {
+            localStorage.clear();
+            channels = [];
+            selectedCategory = 'All';
+            renderChannels();
+            renderCategories();
+            updateStatus('Cache cleared');
+        }
+        
+        // Event listeners
+        document.getElementById('load-btn').onclick = loadPlaylist;
+        document.getElementById('clear-btn').onclick = clearCache;
+        document.getElementById('close-player').onclick = closePlayer;
+        
+        // Remote control navigation
+        document.addEventListener('keydown', (e) => {
+            const playerContainer = document.getElementById('player-container');
+            const isPlayerActive = playerContainer.classList.contains('active');
+            
+            // Back button - Exit player
+            if (e.key === 'Escape' || e.key === 'Backspace' || e.keyCode === 461) {
+                if (isPlayerActive) {
+                    e.preventDefault();
+                    closePlayer();
+                }
+                return;
+            }
+            
+            // Don't handle navigation when player is active
+            if (isPlayerActive) return;
+            
+            // Arrow key navigation
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                const focused = document.activeElement;
+                
+                if (!focused || (!focused.classList.contains('channel-card') && !focused.classList.contains('category-btn'))) {
+                    // Focus first element if nothing is focused
+                    const firstCard = document.querySelector('.channel-card');
+                    if (firstCard) firstCard.focus();
+                    return;
+                }
+                
+                // Get all focusable elements
+                const allElements = Array.from(document.querySelectorAll('.category-btn, .channel-card'));
+                const currentIndex = allElements.indexOf(focused);
+                
+                if (currentIndex === -1) return;
+                
+                const rect = focused.getBoundingClientRect();
+                let bestIndex = -1;
+                let bestDistance = Infinity;
+                
+                // Find best element in the direction
+                allElements.forEach((element, index) => {
+                    if (index === currentIndex) return;
+                    
+                    const targetRect = element.getBoundingClientRect();
+                    let isValid = false;
+                    let distance = 0;
+                    
+                    if (e.key === 'ArrowUp') {
+                        isValid = targetRect.bottom <= rect.top + 10;
+                        distance = rect.top - targetRect.bottom + Math.abs(targetRect.left - rect.left) * 0.3;
+                    } else if (e.key === 'ArrowDown') {
+                        isValid = targetRect.top >= rect.bottom - 10;
+                        distance = targetRect.top - rect.bottom + Math.abs(targetRect.left - rect.left) * 0.3;
+                    } else if (e.key === 'ArrowLeft') {
+                        isValid = targetRect.right <= rect.left + 10;
+                        distance = rect.left - targetRect.right + Math.abs(targetRect.top - rect.top) * 0.3;
+                    } else if (e.key === 'ArrowRight') {
+                        isValid = targetRect.left >= rect.right - 10;
+                        distance = targetRect.left - rect.right + Math.abs(targetRect.top - rect.top) * 0.3;
+                    }
+                    
+                    if (isValid && distance < bestDistance) {
+                        bestDistance = distance;
+                        bestIndex = index;
+                    }
+                });
+                
+                if (bestIndex !== -1) {
+                    allElements[bestIndex].focus();
+                    allElements[bestIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                }
+            }
+            
+            // Enter key - activate focused element
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const focused = document.activeElement;
+                if (focused) {
+                    focused.click();
+                }
+            }
+        });
+        
+        // Load cached channels on startup
+        loadFromCache();
+        
+        console.log('Simple IPTV Test App Ready');
+        console.log('Channels in cache:', channels.length);
+    </script>
+</body>
+</html>

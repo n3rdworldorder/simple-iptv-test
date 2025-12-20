@@ -1,0 +1,18 @@
+{
+  "id": "com.simpleiptv.test",
+  "version": "1.0.0",
+  "vendor": "Test",
+  "type": "web",
+  "main": "index.html",
+  "title": "Simple IPTV Test",
+  "icon": "icon.png",
+  "uiRevision": 2,
+  "resolution": "1920x1080",
+  "requiredPermissions": [
+    "media.operation"
+  ],
+  "allowedPermissions": [
+    "media.operation",
+    "network"
+  ]
+}
