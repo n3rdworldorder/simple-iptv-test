@@ -1,3 +1,4 @@
 *.ipk
 node_modules/
 .DS_Store
+example_m3u_*.m3u

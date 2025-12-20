@@ -21,9 +21,9 @@
         }
         
         .container {
-            max-width: 1400px;
+            max-width: 95%;
             margin: 0 auto;
-            padding: 24px 20px 32px;
+            padding: 24px 40px 32px;
         }
         
         h1 {
@@ -178,10 +178,16 @@
             gap: 8px;
             margin: 18px 0 12px;
             overflow-x: auto;
-            overflow-y: hidden;
-            padding-bottom: 4px;
+            overflow-y: visible;
+            padding: 4px 0 8px;
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
+        }
+        
+        .categories::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, webOS */
         }
         
         .category-btn {
@@ -485,15 +491,62 @@
         
         function detectChannelType(name, group) {
             const text = ((name || '') + ' ' + (group || '')).toLowerCase();
-            if (
-                text.indexOf('vod') !== -1 ||
-                text.indexOf('video on demand') !== -1 ||
-                text.indexOf('on demand') !== -1 ||
-                text.indexOf('movie') !== -1 ||
-                text.indexOf('series') !== -1
-            ) {
-                return 'vod';
+            const groupLower = (group || '').toLowerCase();
+            
+            // If group starts with "LIVE:" or common country/region prefixes, it's live TV
+            const livePrefix = /^(live|uk|us|ca|au|int|nz|eir|int)[\s:]/i;
+            if (livePrefix.test(group || '')) {
+                return 'live';
             }
+            
+            const vodKeywords = [
+                'vod',
+                'video on demand',
+                'on demand',
+                'movie',
+                'movies',
+                'film',
+                'films',
+                'series',
+                'boxset',
+                'boxsets',
+                'box set',
+                'box sets',
+                'catchup',
+                'catch up',
+                'catch-up'
+            ];
+            
+            // Check for VOD keywords
+            for (let i = 0; i < vodKeywords.length; i++) {
+                if (text.indexOf(vodKeywords[i]) !== -1) {
+                    return 'vod';
+                }
+            }
+            
+            // Check if group appears to be a genre-only category (typical for VOD organization)
+            const genreOnlyKeywords = [
+                'action',
+                'adventure',
+                'comedy',
+                'drama',
+                'thriller',
+                'horror',
+                'romance',
+                'fantasy',
+                'sci-fi',
+                'animation',
+                'documentary'
+            ];
+            
+            for (let i = 0; i < genreOnlyKeywords.length; i++) {
+                // Match whole words to avoid false positives
+                const regex = new RegExp('\\b' + genreOnlyKeywords[i] + '\\b', 'i');
+                if (regex.test(groupLower)) {
+                    return 'vod';
+                }
+            }
+            
             return 'live';
         }
 
@@ -501,9 +554,7 @@
             if (!Array.isArray(list)) return [];
             for (let i = 0; i < list.length; i++) {
                 const ch = list[i];
-                if (!ch.type) {
-                    ch.type = detectChannelType(ch.name, ch.group);
-                }
+                ch.type = detectChannelType(ch.name, ch.group);
             }
             return list;
         }
