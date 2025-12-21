@@ -1562,6 +1562,15 @@
         showEnvironmentInfo();
         loadFromCache();
         
+        // Auto-load EPG if URL is configured
+        const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
+        if (cachedEPGUrl && Object.keys(epgData).length === 0) {
+            console.log('Auto-loading EPG data from cached URL...');
+            setTimeout(() => {
+                loadEPG();
+            }, 1000); // Small delay to let the UI render first
+        }
+        
         console.log('Simple IPTV Test App Ready');
         console.log('Channels in cache:', channels.length);
     </script>
