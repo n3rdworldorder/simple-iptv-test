@@ -171,7 +171,7 @@
             font-weight: 500;
             letter-spacing: 0.02em;
             text-align: right;
-            margin-right: 20px;
+            margin-right: 40px;
         }
         
         .date-time .time {
@@ -1613,7 +1613,7 @@
             const dateEl = document.getElementById('date-display');
             
             if (timeEl) timeEl.textContent = `${hours}:${minutes}`;
-            if (dateEl) dateEl.textContent = `${dayName}, ${month} ${date}, ${year}`;
+            if (dateEl) dateEl.textContent = `${dayName} ${month} ${date} ${year}`;
         }
         
         // Update time every second
