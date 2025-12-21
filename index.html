@@ -1075,7 +1075,7 @@
                     section.appendChild(header);
                     
                     const groupGrid = document.createElement('div');
-                    const hasEPG = Object.keys(epgData).length > 0;
+                    const hasEPG = Object.keys(epgData).length > 0 && currentMode === 'live';
                     groupGrid.className = hasEPG ? 'group-channels list-mode' : 'group-channels';
                     
                     groupedChannels[groupName].forEach(channel => {
@@ -1158,7 +1158,7 @@
                 section.appendChild(header);
                 
                 const groupGrid = document.createElement('div');
-                const hasEPG = Object.keys(epgData).length > 0;
+                const hasEPG = Object.keys(epgData).length > 0 && currentMode === 'live';
                 groupGrid.className = hasEPG ? 'group-channels list-mode' : 'group-channels';
                 
                 filtered.forEach((channel, index) => {
