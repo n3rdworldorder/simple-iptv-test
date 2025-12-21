@@ -129,6 +129,25 @@
             gap: 12px;
             margin-bottom: 8px;
         }
+        
+        .app-header h1 {
+            flex: 1;
+        }
+        
+        .date-time {
+            font-size: 32px;
+            color: #9ca3af;
+            font-weight: 500;
+            letter-spacing: 0.02em;
+            text-align: right;
+        }
+        
+        .date-time .time {
+            color: #60a5fa;
+            font-size: 40px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
 
         .settings-btn {
             display: inline-flex;
@@ -493,6 +512,10 @@
     <div class="container" role="main">
         <div class="app-header">
             <h1>Simple IPTV Test App</h1>
+            <div class="date-time" id="date-time">
+                <span class="time" id="time-display">00:00</span>
+                <span id="date-display">Loading...</span>
+            </div>
             <button id="settings-btn" class="category-btn settings-btn" tabindex="0" aria-label="Settings">⚙</button>
         </div>
 
@@ -1379,6 +1402,31 @@
         function updateStatus(message) {
             document.getElementById('status').textContent = message;
         }
+        
+        // Update date and time display
+        function updateDateTime() {
+            const now = new Date();
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            const dayName = days[now.getDay()];
+            const month = months[now.getMonth()];
+            const date = now.getDate();
+            const year = now.getFullYear();
+            
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            const timeEl = document.getElementById('time-display');
+            const dateEl = document.getElementById('date-display');
+            
+            if (timeEl) timeEl.textContent = `${hours}:${minutes}`;
+            if (dateEl) dateEl.textContent = `${dayName}, ${month} ${date}, ${year}`;
+        }
+        
+        // Update time every second
+        setInterval(updateDateTime, 1000);
+        updateDateTime(); // Initial update
 
         // Show environment info (user agent and HLS capabilities)
         function showEnvironmentInfo() {
