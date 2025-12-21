@@ -702,33 +702,79 @@
         }
         
         function getCurrentProgram(channelId, channelName) {
+            const now = Date.now();
+            let programs = null;
+            let matchedChannel = null;
+            
             // Try exact match with tvg-id first
-            if (epgData[channelId]) {
-                const now = Date.now();
-                const programs = epgData[channelId];
+            if (channelId && epgData[channelId]) {
+                programs = epgData[channelId];
+                matchedChannel = channelId;
+            }
+            // Try exact match by channel name
+            else if (channelName && epgData[channelName]) {
+                programs = epgData[channelName];
+                matchedChannel = channelName;
+            }
+            // Try fuzzy matching
+            else if (channelName) {
+                // Extract core channel name - remove prefixes, suffixes, and normalize
+                const normalized = channelName
+                    .replace(/^(CA|UK|US|AU|NZ|INT|EIR):\s*/i, '') // Remove country prefix
+                    .replace(/\s*\(.*?\)/g, '') // Remove parentheses content like (EAST)
+                    .replace(/\s*HD$/i, '')
+                    .replace(/\s*FHD$/i, '')
+                    .replace(/\s*SD$/i, '')
+                    .replace(/\s*4K$/i, '')
+                    .replace(/\s+/g, '') // Remove all spaces
+                    .trim()
+                    .toLowerCase();
                 
-                for (let i = 0; i < programs.length; i++) {
-                    const prog = programs[i];
-                    if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
-                        return prog;
+                // Search EPG data - extract core name from domain-style IDs
+                for (const epgChannel in epgData) {
+                    // Extract the main part before the domain (e.g., "animalplanet" from "animalplanet.us")
+                    const epgCore = epgChannel
+                        .replace(/\.(uk|us|ca|au|nz|int)$/i, '') // Remove country domain
+                        .replace(/hd$/i, '')
+                        .replace(/fhd$/i, '')
+                        .replace(/sd$/i, '')
+                        .replace(/plus1$/i, '')
+                        .replace(/\+1$/i, '')
+                        .toLowerCase();
+                    
+                    if (normalized === epgCore || normalized.includes(epgCore) || epgCore.includes(normalized)) {
+                        programs = epgData[epgChannel];
+                        matchedChannel = epgChannel;
+                        console.log(`  ✓ Matched "${channelName}" to EPG channel "${epgChannel}"`);
+                        break;
                     }
                 }
             }
             
-            // Try matching by channel name as fallback
-            if (channelName && epgData[channelName]) {
-                const now = Date.now();
-                const programs = epgData[channelName];
-                
-                for (let i = 0; i < programs.length; i++) {
-                    const prog = programs[i];
-                    if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
-                        return prog;
-                    }
+            if (!programs || programs.length === 0) return null;
+            
+            // Try to find currently airing program
+            for (let i = 0; i < programs.length; i++) {
+                const prog = programs[i];
+                if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
+                    return prog;
                 }
             }
             
-            return null;
+            // If no current program, find the closest one (next or most recent)
+            let closest = programs[0];
+            let closestDiff = Math.abs(programs[0].start - now);
+            
+            for (let i = 1; i < programs.length; i++) {
+                const diff = Math.abs(programs[i].start - now);
+                if (diff < closestDiff) {
+                    closest = programs[i];
+                    closestDiff = diff;
+                }
+            }
+            
+            // Mark it as not current by adding a flag
+            return { ...closest, notCurrent: true };
         }
         
         // Load EPG from URL
@@ -1044,6 +1090,18 @@
                         // Debug EPG matching for first few channels
                         if (groupedChannels[groupName].indexOf(channel) < 2) {
                             console.log(`Channel: ${channel.name}, tvgId: ${channel.tvgId || '(none)'}, EPG found:`, !!currentProg);
+                            if (currentProg) {
+                                console.log('  Program:', currentProg.title, 'Start:', new Date(currentProg.start));
+                            }
+                            // Try to find what EPG keys might match
+                            const allEpgKeys = Object.keys(epgData);
+                            const possibleMatches = allEpgKeys.filter(key => 
+                                key.toLowerCase().includes(channel.name.toLowerCase().substring(4, 10)) ||
+                                channel.name.toLowerCase().includes(key.toLowerCase().substring(0, 6))
+                            );
+                            if (possibleMatches.length > 0) {
+                                console.log('  Possible EPG matches:', possibleMatches.slice(0, 3));
+                            }
                         }
                         
                         if (hasEPG && currentProg) {
