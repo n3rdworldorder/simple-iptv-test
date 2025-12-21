@@ -819,12 +819,11 @@
                     }
                 });
                 
-                // Save EPG data to localStorage
+                // Save EPG URL for auto-refresh on startup
                 try {
-                    localStorage.setItem('simple-iptv-epg', JSON.stringify(epgData));
                     localStorage.setItem('simple-iptv-epg-url', url);
                 } catch (e) {
-                    console.warn('Could not cache EPG data:', e);
+                    console.warn('Could not save EPG URL:', e);
                 }
                 
                 updateProgress(100);
@@ -853,17 +852,6 @@
                 } catch (e) {
                     console.error('Cache corrupted:', e);
                     localStorage.clear();
-                }
-            }
-            
-            // Load cached EPG data
-            const cachedEPG = localStorage.getItem('simple-iptv-epg');
-            if (cachedEPG) {
-                try {
-                    epgData = JSON.parse(cachedEPG);
-                } catch (e) {
-                    console.error('EPG cache corrupted:', e);
-                    localStorage.removeItem('simple-iptv-epg');
                 }
             }
             
@@ -1562,10 +1550,10 @@
         showEnvironmentInfo();
         loadFromCache();
         
-        // Auto-load EPG if URL is configured
+        // Auto-refresh EPG if URL is configured
         const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
-        if (cachedEPGUrl && Object.keys(epgData).length === 0) {
-            console.log('Auto-loading EPG data from cached URL...');
+        if (cachedEPGUrl) {
+            console.log('Auto-refreshing EPG data from configured URL...');
             setTimeout(() => {
                 loadEPG();
             }, 1000); // Small delay to let the UI render first
