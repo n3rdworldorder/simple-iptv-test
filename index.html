@@ -682,6 +682,9 @@
                 epg[channel].sort((a, b) => a.start - b.start);
             });
             
+            console.log('EPG data loaded for channels:', Object.keys(epg).slice(0, 10));
+            console.log('Total EPG channels:', Object.keys(epg).length);
+            
             return epg;
         }
         
@@ -698,16 +701,30 @@
             return new Date(dateStr).getTime();
         }
         
-        function getCurrentProgram(channelId) {
-            if (!epgData[channelId]) return null;
+        function getCurrentProgram(channelId, channelName) {
+            // Try exact match with tvg-id first
+            if (epgData[channelId]) {
+                const now = Date.now();
+                const programs = epgData[channelId];
+                
+                for (let i = 0; i < programs.length; i++) {
+                    const prog = programs[i];
+                    if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
+                        return prog;
+                    }
+                }
+            }
             
-            const now = Date.now();
-            const programs = epgData[channelId];
-            
-            for (let i = 0; i < programs.length; i++) {
-                const prog = programs[i];
-                if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
-                    return prog;
+            // Try matching by channel name as fallback
+            if (channelName && epgData[channelName]) {
+                const now = Date.now();
+                const programs = epgData[channelName];
+                
+                for (let i = 0; i < programs.length; i++) {
+                    const prog = programs[i];
+                    if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
+                        return prog;
+                    }
                 }
             }
             
@@ -746,6 +763,15 @@
                 if (channelCount === 0) {
                     throw new Error('No EPG data found');
                 }
+                
+                // Log sample for debugging
+                const sampleChannels = Object.keys(epgData).slice(0, 5);
+                console.log('Sample EPG channels:', sampleChannels);
+                sampleChannels.forEach(ch => {
+                    if (epgData[ch][0]) {
+                        console.log(`  ${ch}: ${epgData[ch][0].title}`);
+                    }
+                });
                 
                 // Save EPG data to localStorage
                 try {
@@ -875,6 +901,12 @@
                 channels = parseM3U(content);
                 channels = normalizeChannelTypes(channels);
                 
+                // Log sample for debugging EPG matching
+                console.log('Sample channels with tvg-id:');
+                channels.slice(0, 5).forEach(ch => {
+                    console.log(`  ${ch.name} -> tvg-id: ${ch.tvgId || '(none)'}`);
+                });
+                
                 if (channels.length === 0) {
                     throw new Error('No channels found in playlist');
                 }
@@ -967,6 +999,13 @@
             
             // When "All" is selected, group channels by category
             if (selectedCategory === 'All') {
+                // Debug EPG matching
+                if (Object.keys(epgData).length > 0) {
+                    console.log('EPG data available. First EPG channel:', Object.keys(epgData)[0]);
+                    console.log('First playlist channel:', filtered[0] ? filtered[0].name : 'none');
+                    console.log('First playlist tvgId:', filtered[0] ? filtered[0].tvgId : 'none');
+                }
+                
                 // Group channels by category
                 const groupedChannels = {};
                 filtered.forEach(channel => {
@@ -1000,7 +1039,12 @@
                         card.setAttribute('role', 'button');
                         card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
                         
-                        const currentProg = getCurrentProgram(channel.tvgId || channel.name);
+                        const currentProg = getCurrentProgram(channel.tvgId, channel.name);
+                        
+                        // Debug EPG matching for first few channels
+                        if (groupedChannels[groupName].indexOf(channel) < 2) {
+                            console.log(`Channel: ${channel.name}, tvgId: ${channel.tvgId || '(none)'}, EPG found:`, !!currentProg);
+                        }
                         
                         if (hasEPG && currentProg) {
                             const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -1066,7 +1110,7 @@
                     card.setAttribute('role', 'button');
                     card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
                     
-                    const currentProg = getCurrentProgram(channel.tvgId || channel.name);
+                    const currentProg = getCurrentProgram(channel.tvgId, channel.name);
                     
                     if (hasEPG && currentProg) {
                         const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
