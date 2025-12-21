@@ -2195,20 +2195,22 @@
                     return false;
                 }
                 
-                // Channel Up key (keyCode 427 on webOS/Samsung)
-                if (e.keyCode === 427) {
+                // Channel Up key (keyCode 427 on webOS/Samsung, or PageUp 33)
+                if (e.keyCode === 427 || e.keyCode === 33 || e.key === 'PageUp' || e.key === 'ChannelUp') {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
+                    console.log('Channel Up pressed - changing to next channel');
                     changeChannel(1);
                     return false;
                 }
                 
-                // Channel Down key (keyCode 428 on webOS/Samsung)
-                if (e.keyCode === 428) {
+                // Channel Down key (keyCode 428 on webOS/Samsung, or PageDown 34)
+                if (e.keyCode === 428 || e.keyCode === 34 || e.key === 'PageDown' || e.key === 'ChannelDown') {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
+                    console.log('Channel Down pressed - changing to previous channel');
                     changeChannel(-1);
                     return false;
                 }
