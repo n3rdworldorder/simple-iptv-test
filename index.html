@@ -756,12 +756,13 @@
             return channels.filter(ch => ch.type !== 'vod');
         }
 
-        // Parse XMLTV EPG data
-        function parseXMLTV(xmlContent) {
+        // Parse XMLTV EPG data (async to allow UI updates)
+        async function parseXMLTV(xmlContent, onProgress) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
             const programmes = xmlDoc.getElementsByTagName('programme');
             const epg = {};
+            const total = programmes.length;
             
             for (let i = 0; i < programmes.length; i++) {
                 const prog = programmes[i];
@@ -788,6 +789,20 @@
                     start: startTime,
                     stop: stopTime
                 });
+                
+                // Yield control to allow UI updates every 500 items
+                if (i % 500 === 0) {
+                    if (onProgress) {
+                        onProgress(i + 1, total);
+                    }
+                    // Yield to event loop to allow UI updates
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            }
+            
+            // Final progress update
+            if (onProgress) {
+                onProgress(total, total);
             }
             
             // Sort programs by start time
@@ -957,7 +972,12 @@
                 // Small delay to ensure status is visible
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
-                epgData = parseXMLTV(content);
+                // Parse with progress callback (now async)
+                epgData = await parseXMLTV(content, (current, total) => {
+                    const percent = 70 + Math.floor((current / total) * 25);
+                    updateProgress(percent);
+                    updateStatus(`Parsing EPG data... ${current.toLocaleString()} / ${total.toLocaleString()} programs`);
+                });
                 
                 const channelCount = Object.keys(epgData).length;
                 if (channelCount === 0) {
