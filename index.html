@@ -284,7 +284,7 @@
             margin: 18px 0 12px;
             overflow-x: auto;
             overflow-y: visible;
-            padding: 4px 0 8px;
+            padding: 4px 8px 8px;
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none; /* Firefox */
@@ -640,6 +640,24 @@
             margin-bottom: 4px;
         }
 
+        .banner-program-section {
+            margin-bottom: 20px;
+        }
+        
+        .banner-program-section:last-of-type {
+            margin-bottom: 0;
+        }
+        
+        .banner-program-label {
+            font-size: 24px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+        }
+        
         .banner-epg-title {
             font-size: 36px;
             font-weight: 600;
@@ -662,7 +680,7 @@
             max-width: 90%;
             overflow: hidden;
             display: -webkit-box;
-            -webkit-line-clamp: 3;
+            -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
         }
@@ -682,6 +700,29 @@
             border-radius: 999px;
             transition: width 0.3s ease;
             box-shadow: 0 0 10px rgba(34, 197, 235, 0.65);
+        }
+        
+        .banner-indicators {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-top: 16px;
+        }
+        
+        .banner-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .banner-indicator.active {
+            background: #60a5fa;
+            width: 14px;
+            height: 14px;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
         }
     </style>
 </head>
@@ -769,11 +810,24 @@
                     <span id="banner-date"></span>
                 </div>
             </div>
-            <div class="banner-epg-title" id="banner-epg-title"></div>
-            <div class="banner-epg-time" id="banner-epg-time"></div>
-            <div class="banner-epg-desc" id="banner-epg-desc"></div>
-            <div class="banner-progress" id="banner-progress" style="display: none;">
-                <div class="banner-progress-bar" id="banner-progress-bar" style="width: 0%;"></div>
+            <div class="banner-program-section" id="banner-now-section">
+                <div class="banner-program-label">Now</div>
+                <div class="banner-epg-title" id="banner-epg-title"></div>
+                <div class="banner-epg-time" id="banner-epg-time"></div>
+                <div class="banner-epg-desc" id="banner-epg-desc"></div>
+                <div class="banner-progress" id="banner-progress" style="display: none;">
+                    <div class="banner-progress-bar" id="banner-progress-bar" style="width: 0%;"></div>
+                </div>
+            </div>
+            <div class="banner-program-section" id="banner-next-section" style="display: none;">
+                <div class="banner-program-label">Next</div>
+                <div class="banner-epg-title" id="banner-next-title"></div>
+                <div class="banner-epg-time" id="banner-next-time"></div>
+                <div class="banner-epg-desc" id="banner-next-desc"></div>
+            </div>
+            <div class="banner-indicators" id="banner-indicators" style="display: none;">
+                <div class="banner-indicator" id="indicator-now"></div>
+                <div class="banner-indicator" id="indicator-next"></div>
             </div>
         </div>
     </div>
@@ -785,6 +839,9 @@
         let currentMode = 'live'; // 'live' or 'vod'
         let epgData = {}; // Store EPG data by channel ID
         let currentPlayingChannel = null; // Track currently playing channel
+        let bannerView = 'now'; // 'now' or 'next'
+        let bannerTimeout = null;
+        let bannerHasNext = false; // Track if next program exists
         
         function detectChannelType(name, group) {
             const text = ((name || '') + ' ' + (group || '')).toLowerCase();
@@ -1564,19 +1621,109 @@
             updateStatus(`Showing ${mode === 'vod' ? 'VOD' : 'Live TV'} channels`);
         }
         
+        // Get next program for a channel
+        function getNextProgram(channelId, channelName) {
+            const now = Date.now();
+            let programs = null;
+            
+            // Try exact match with tvg-id first
+            if (channelId && epgData[channelId]) {
+                programs = epgData[channelId];
+            }
+            // Try exact match by channel name
+            else if (channelName && epgData[channelName]) {
+                programs = epgData[channelName];
+            }
+            // Try fuzzy matching
+            else if (channelName) {
+                const normalized = channelName
+                    .replace(/^(CA|UK|US|AU|NZ|INT|EIR):\s*/i, '')
+                    .replace(/\s*\(.*?\)/g, '')
+                    .replace(/\s*HD$/i, '')
+                    .replace(/\s*FHD$/i, '')
+                    .replace(/\s*SD$/i, '')
+                    .replace(/\s*4K$/i, '')
+                    .replace(/\s+/g, '')
+                    .trim()
+                    .toLowerCase();
+                
+                for (const epgChannel in epgData) {
+                    const epgCore = epgChannel
+                        .replace(/\.(uk|us|ca|au|nz|int)$/i, '')
+                        .replace(/hd$/i, '')
+                        .replace(/fhd$/i, '')
+                        .replace(/sd$/i, '')
+                        .replace(/plus1$/i, '')
+                        .replace(/\+1$/i, '')
+                        .toLowerCase();
+                    
+                    if (normalized === epgCore || normalized.includes(epgCore) || epgCore.includes(normalized)) {
+                        programs = epgData[epgChannel];
+                        break;
+                    }
+                }
+            }
+            
+            if (!programs || programs.length === 0) return null;
+            
+            // Find the next program (starts after now)
+            for (let i = 0; i < programs.length; i++) {
+                const prog = programs[i];
+                if (prog.start > now) {
+                    return prog;
+                }
+            }
+            
+            return null;
+        }
+        
+        // Update banner view (now or next)
+        function updateBannerView() {
+            const nowSection = document.getElementById('banner-now-section');
+            const nextSection = document.getElementById('banner-next-section');
+            const indicators = document.getElementById('banner-indicators');
+            const indicatorNow = document.getElementById('indicator-now');
+            const indicatorNext = document.getElementById('indicator-next');
+            
+            if (bannerView === 'now') {
+                nowSection.style.display = 'block';
+                nextSection.style.display = 'none';
+                indicatorNow.classList.add('active');
+                indicatorNext.classList.remove('active');
+            } else {
+                nowSection.style.display = 'none';
+                nextSection.style.display = 'block';
+                indicatorNow.classList.remove('active');
+                indicatorNext.classList.add('active');
+            }
+            
+            // Show indicators only if there's a next program
+            indicators.style.display = bannerHasNext ? 'flex' : 'none';
+        }
+        
         // Show channel banner with EPG info
-        function showChannelBanner(channel) {
+        function showChannelBanner(channel, resetView = true) {
             const banner = document.getElementById('channel-banner');
             const channelName = document.getElementById('banner-channel-name');
+            const nowSection = document.getElementById('banner-now-section');
+            const nextSection = document.getElementById('banner-next-section');
             const epgTitle = document.getElementById('banner-epg-title');
             const epgTime = document.getElementById('banner-epg-time');
             const epgDesc = document.getElementById('banner-epg-desc');
             const progressContainer = document.getElementById('banner-progress');
             const progressBar = document.getElementById('banner-progress-bar');
+            const nextTitle = document.getElementById('banner-next-title');
+            const nextTime = document.getElementById('banner-next-time');
+            const nextDesc = document.getElementById('banner-next-desc');
             const bannerTime = document.getElementById('banner-time');
             const bannerDate = document.getElementById('banner-date');
             
             if (!banner) return;
+            
+            // Reset view to 'now' when first showing banner
+            if (resetView) {
+                bannerView = 'now';
+            }
             
             // Set channel name
             channelName.textContent = channel.name;
@@ -1600,6 +1747,9 @@
             // Only show EPG for live TV
             if (channel.type === 'live' && Object.keys(epgData).length > 0) {
                 const currentProg = getCurrentProgram(channel.tvgId, channel.name);
+                const nextProg = getNextProgram(channel.tvgId, channel.name);
+                
+                bannerHasNext = !!nextProg;
                 
                 if (currentProg) {
                     const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -1609,8 +1759,6 @@
                     epgTitle.textContent = currentProg.title;
                     epgTime.textContent = timeStr;
                     epgDesc.textContent = currentProg.desc || '';
-                    epgTitle.style.display = 'block';
-                    epgTime.style.display = 'block';
                     epgDesc.style.display = currentProg.desc ? 'block' : 'none';
                     
                     // Calculate and show progress bar
@@ -1626,24 +1774,40 @@
                         progressContainer.style.display = 'none';
                     }
                 } else {
-                    epgTitle.style.display = 'none';
-                    epgTime.style.display = 'none';
-                    epgDesc.style.display = 'none';
-                    progressContainer.style.display = 'none';
+                    // No current program
+                    bannerHasNext = false;
+                }
+                
+                // Populate next program data
+                if (nextProg) {
+                    const startTime = new Date(nextProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    const stopTime = nextProg.stop ? new Date(nextProg.stop).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
+                    
+                    nextTitle.textContent = nextProg.title;
+                    nextTime.textContent = timeStr;
+                    nextDesc.textContent = nextProg.desc || '';
+                    nextDesc.style.display = nextProg.desc ? 'block' : 'none';
                 }
             } else {
-                epgTitle.style.display = 'none';
-                epgTime.style.display = 'none';
-                epgDesc.style.display = 'none';
-                progressContainer.style.display = 'none';
+                bannerHasNext = false;
             }
+            
+            // Update view based on current selection
+            updateBannerView();
             
             // Show banner
             banner.classList.add('visible');
             
+            // Clear existing timeout
+            if (bannerTimeout) {
+                clearTimeout(bannerTimeout);
+            }
+            
             // Hide after 7 seconds
-            setTimeout(() => {
+            bannerTimeout = setTimeout(() => {
                 banner.classList.remove('visible');
+                bannerTimeout = null;
             }, 7000);
         }
         
@@ -1975,8 +2139,11 @@
                 console.log('Back button - letting app exit');
             }
             
-            // When player is active, Enter/OK shows info banner
+            // When player is active, Enter/OK shows info banner, left/right navigate banner
             if (isPlayerActive) {
+                const banner = document.getElementById('channel-banner');
+                const isBannerVisible = banner && banner.classList.contains('visible');
+                
                 if (e.key === 'Enter' || e.keyCode === 13) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1987,6 +2154,43 @@
                     }
                     return false;
                 }
+                
+                // Navigate between Now and Next with left/right arrows when banner is visible
+                if (isBannerVisible && bannerHasNext) {
+                    if (e.key === 'ArrowLeft' || e.keyCode === 37) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        if (bannerView === 'next') {
+                            bannerView = 'now';
+                            updateBannerView();
+                            // Reset timeout
+                            if (bannerTimeout) clearTimeout(bannerTimeout);
+                            bannerTimeout = setTimeout(() => {
+                                banner.classList.remove('visible');
+                                bannerTimeout = null;
+                            }, 7000);
+                        }
+                        return false;
+                    }
+                    if (e.key === 'ArrowRight' || e.keyCode === 39) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        if (bannerView === 'now') {
+                            bannerView = 'next';
+                            updateBannerView();
+                            // Reset timeout
+                            if (bannerTimeout) clearTimeout(bannerTimeout);
+                            bannerTimeout = setTimeout(() => {
+                                banner.classList.remove('visible');
+                                bannerTimeout = null;
+                            }, 7000);
+                        }
+                        return false;
+                    }
+                }
+                
                 return;
             }
             
