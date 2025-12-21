@@ -897,7 +897,7 @@
                 return;
             }
             
-            updateStatus('Loading EPG data...');
+            updateStatus('Downloading EPG data...');
             startProgress();
             updateProgress(10);
             
@@ -911,10 +911,51 @@
                 const response = await fetch(fetchUrl);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-                updateProgress(40);
-                const content = await response.text();
+                // Get content length if available
+                const contentLength = response.headers.get('Content-Length');
+                const total = contentLength ? parseInt(contentLength, 10) : 0;
+                
+                let loaded = 0;
+                const reader = response.body.getReader();
+                const chunks = [];
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) break;
+                    
+                    chunks.push(value);
+                    loaded += value.length;
+                    
+                    const loadedKB = (loaded / 1024).toFixed(1);
+                    if (total > 0) {
+                        const totalKB = (total / 1024).toFixed(1);
+                        const percent = Math.min(90, 10 + (loaded / total) * 60);
+                        updateProgress(percent);
+                        updateStatus(`Downloading EPG data... ${loadedKB} KB / ${totalKB} KB`);
+                    } else {
+                        updateStatus(`Downloading EPG data... ${loadedKB} KB`);
+                        // Animate progress without total
+                        const percent = Math.min(60, 10 + (loaded / (1024 * 100)) * 50);
+                        updateProgress(percent);
+                    }
+                }
+                
+                // Combine chunks into single string
+                const allChunks = new Uint8Array(loaded);
+                let position = 0;
+                for (const chunk of chunks) {
+                    allChunks.set(chunk, position);
+                    position += chunk.length;
+                }
+                const content = new TextDecoder('utf-8').decode(allChunks);
 
                 updateProgress(70);
+                updateStatus('Parsing EPG data...');
+                
+                // Small delay to ensure status is visible
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
                 epgData = parseXMLTV(content);
                 
                 const channelCount = Object.keys(epgData).length;
@@ -932,14 +973,38 @@
                 });
                 
                 // Save EPG URL for auto-refresh on startup
+                let cacheSuccessful = false;
+                let cacheSizeKB = 0;
                 try {
                     localStorage.setItem('simple-iptv-epg-url', url);
+                    // Cache EPG data with timestamp
+                    const epgCache = {
+                        data: epgData,
+                        timestamp: Date.now(),
+                        url: url
+                    };
+                    console.log('Attempting to cache EPG data...');
+                    const cacheString = JSON.stringify(epgCache);
+                    cacheSizeKB = (cacheString.length / 1024).toFixed(1);
+                    console.log(`EPG cache size: ${cacheSizeKB} KB`);
+                    localStorage.setItem('simple-iptv-epg-cache', cacheString);
+                    console.log('EPG data cached successfully');
+                    cacheSuccessful = true;
                 } catch (e) {
-                    console.warn('Could not save EPG URL:', e);
+                    console.error('Could not save EPG data:', e);
+                    if (e.name === 'QuotaExceededError') {
+                        updateStatus(`⚠ EPG loaded (${channelCount} channels) but cache too large. Will re-download next time.`);
+                    } else {
+                        updateStatus(`⚠ EPG loaded (${channelCount} channels) but cache failed: ${e.message}`);
+                    }
                 }
                 
                 updateProgress(100);
-                updateStatus(`Loaded EPG data for ${channelCount} channels`);
+                if (cacheSuccessful) {
+                    updateStatus(`Loaded EPG data for ${channelCount} channels (cached ${cacheSizeKB} KB)`);
+                } else if (!document.getElementById('status').textContent.includes('⚠')) {
+                    updateStatus(`Loaded EPG data for ${channelCount} channels (cache failed)`);
+                }
                 finishProgress();
                 
                 // Re-render channels to show EPG info
@@ -972,6 +1037,47 @@
             if (cachedEPGUrl) {
                 const epgInput = document.getElementById('epg-url');
                 if (epgInput) epgInput.value = cachedEPGUrl;
+            }
+            
+            // Load EPG from cache if less than 24 hours old
+            loadEPGFromCache();
+        }
+        
+        // Load EPG data from cache if valid
+        function loadEPGFromCache() {
+            try {
+                const cachedEPG = localStorage.getItem('simple-iptv-epg-cache');
+                if (!cachedEPG) {
+                    console.log('No cached EPG data found');
+                    updateStatus('No EPG cache found');
+                    return false;
+                }
+                
+                console.log(`Found cached EPG, size: ${(cachedEPG.length / 1024).toFixed(1)} KB`);
+                
+                const epgCache = JSON.parse(cachedEPG);
+                const age = Date.now() - epgCache.timestamp;
+                const ageHours = age / (1000 * 60 * 60);
+                
+                console.log(`Cached EPG age: ${ageHours.toFixed(1)} hours (timestamp: ${new Date(epgCache.timestamp).toLocaleString()})`);
+                
+                if (ageHours < 24) {
+                    // Cache is still valid
+                    epgData = epgCache.data;
+                    const channelCount = Object.keys(epgData).length;
+                    console.log(`✓ Loaded ${channelCount} channels from EPG cache`);
+                    updateStatus(`✓ EPG loaded from cache (${ageHours.toFixed(1)}h old, ${channelCount} channels)`);
+                    renderChannels(); // Re-render to show EPG info
+                    return true;
+                } else {
+                    console.log('✗ Cached EPG is older than 24 hours, will refresh');
+                    updateStatus(`EPG cache expired (${ageHours.toFixed(1)}h old)`);
+                    return false;
+                }
+            } catch (e) {
+                console.error('Error loading EPG from cache:', e);
+                updateStatus(`EPG cache error: ${e.message}`);
+                return false;
             }
         }
         
@@ -1819,13 +1925,37 @@
         showEnvironmentInfo();
         loadFromCache();
         
-        // Auto-refresh EPG if URL is configured
+        // Auto-refresh EPG if URL is configured and cache is invalid
         const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
         if (cachedEPGUrl) {
-            console.log('Auto-refreshing EPG data from configured URL...');
+            // Check if we need to refresh (cache is older than 24 hours or doesn't exist)
             setTimeout(() => {
-                loadEPG();
-            }, 1000); // Small delay to let the UI render first
+                try {
+                    const cachedEPG = localStorage.getItem('simple-iptv-epg-cache');
+                    if (!cachedEPG) {
+                        console.log('No EPG cache found, downloading fresh...');
+                        loadEPG();
+                        return;
+                    }
+                    
+                    const epgCache = JSON.parse(cachedEPG);
+                    const age = Date.now() - epgCache.timestamp;
+                    const ageHours = age / (1000 * 60 * 60);
+                    
+                    console.log(`EPG cache check: age = ${ageHours.toFixed(1)} hours`);
+                    
+                    if (ageHours >= 24) {
+                        console.log(`EPG cache is old (${ageHours.toFixed(1)} hours), downloading fresh...`);
+                        loadEPG();
+                    } else {
+                        console.log(`EPG cache is fresh (${ageHours.toFixed(1)} hours old), no download needed`);
+                    }
+                } catch (e) {
+                    console.error('Error checking EPG cache age:', e);
+                    console.log('Cache check failed, downloading fresh EPG...');
+                    loadEPG();
+                }
+            }, 2000); // Delay to let the UI render and cache load complete
         }
         
         console.log('Simple IPTV Test App Ready');
