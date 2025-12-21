@@ -734,6 +734,7 @@
         let selectedCategory = 'All';
         let currentMode = 'live'; // 'live' or 'vod'
         let epgData = {}; // Store EPG data by channel ID
+        let currentPlayingChannel = null; // Track currently playing channel
         
         function detectChannelType(name, group) {
             const text = ((name || '') + ' ' + (group || '')).toLowerCase();
@@ -1569,6 +1570,9 @@
             
             console.log('Playing channel:', channel.name, 'URL:', channel.url);
             
+            // Store current channel for info banner
+            currentPlayingChannel = channel;
+            
             // Add history state so back button works within app
             window.history.pushState({ player: true, channel: channel.name }, '', '');
             
@@ -1669,6 +1673,7 @@
             console.log('closePlayer called');
             playerContainer.classList.remove('active');
             window.playerActive = false; // Clear global flag
+            currentPlayingChannel = null; // Clear current channel
             video.pause();
             
             if (hls) {
@@ -1885,8 +1890,20 @@
                 console.log('Back button - letting app exit');
             }
             
-            // Don't handle navigation when player is active
-            if (isPlayerActive) return;
+            // When player is active, Enter/OK shows info banner
+            if (isPlayerActive) {
+                if (e.key === 'Enter' || e.keyCode === 13) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    if (currentPlayingChannel) {
+                        console.log('Showing info banner for current channel');
+                        showChannelBanner(currentPlayingChannel);
+                    }
+                    return false;
+                }
+                return;
+            }
             
             // Arrow key navigation
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
