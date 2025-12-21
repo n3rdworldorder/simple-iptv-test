@@ -811,7 +811,7 @@
                 </div>
             </div>
             <div class="banner-program-section" id="banner-now-section">
-                <div class="banner-program-label">Now</div>
+                <div class="banner-program-label" id="banner-now-label">Now</div>
                 <div class="banner-epg-title" id="banner-epg-title"></div>
                 <div class="banner-epg-time" id="banner-epg-time"></div>
                 <div class="banner-epg-desc" id="banner-epg-desc"></div>
@@ -820,10 +820,13 @@
                 </div>
             </div>
             <div class="banner-program-section" id="banner-next-section" style="display: none;">
-                <div class="banner-program-label">Next</div>
+                <div class="banner-program-label" id="banner-next-label">Next</div>
                 <div class="banner-epg-title" id="banner-next-title"></div>
                 <div class="banner-epg-time" id="banner-next-time"></div>
                 <div class="banner-epg-desc" id="banner-next-desc"></div>
+                <div class="banner-progress" style="visibility: hidden;">
+                    <div class="banner-progress-bar" style="width: 0%;"></div>
+                </div>
             </div>
             <div class="banner-indicators" id="banner-indicators" style="display: none;">
                 <div class="banner-indicator" id="indicator-now"></div>
@@ -839,6 +842,7 @@
         let currentMode = 'live'; // 'live' or 'vod'
         let epgData = {}; // Store EPG data by channel ID
         let currentPlayingChannel = null; // Track currently playing channel
+        let currentChannelIndex = -1; // Track current channel index for channel navigation
         let bannerView = 'now'; // 'now' or 'next'
         let bannerTimeout = null;
         let bannerHasNext = false; // Track if next program exists
@@ -1684,6 +1688,17 @@
             const indicators = document.getElementById('banner-indicators');
             const indicatorNow = document.getElementById('indicator-now');
             const indicatorNext = document.getElementById('indicator-next');
+            const nowLabel = document.getElementById('banner-now-label');
+            const nextLabel = document.getElementById('banner-next-label');
+            
+            // Update labels with arrows to show navigation
+            if (bannerHasNext) {
+                nowLabel.textContent = '< NOW >';
+                nextLabel.textContent = '< NEXT >';
+            } else {
+                nowLabel.textContent = 'NOW';
+                nextLabel.textContent = 'NEXT';
+            }
             
             if (bannerView === 'now') {
                 nowSection.style.display = 'block';
@@ -1819,8 +1834,9 @@
             
             console.log('Playing channel:', channel.name, 'URL:', channel.url);
             
-            // Store current channel for info banner
+            // Store current channel for info banner and track index
             currentPlayingChannel = channel;
+            currentChannelIndex = channels.indexOf(channel);
             
             // Add history state so back button works within app
             window.history.pushState({ player: true, channel: channel.name }, '', '');
@@ -1914,6 +1930,28 @@
             updateStatus(`Playing: ${channel.name}`);
         }
         
+        // Navigate to next/previous channel
+        function changeChannel(direction) {
+            if (!currentPlayingChannel || currentChannelIndex === -1 || channels.length === 0) {
+                return;
+            }
+            
+            let newIndex = currentChannelIndex + direction;
+            
+            // Wrap around
+            if (newIndex >= channels.length) {
+                newIndex = 0;
+            } else if (newIndex < 0) {
+                newIndex = channels.length - 1;
+            }
+            
+            const newChannel = channels[newIndex];
+            if (newChannel) {
+                console.log('Changing channel:', direction > 0 ? 'up' : 'down', 'to', newChannel.name);
+                playChannel(newChannel);
+            }
+        }
+        
         // Close player
         function closePlayer() {
             const playerContainer = document.getElementById('player-container');
@@ -1923,6 +1961,7 @@
             playerContainer.classList.remove('active');
             window.playerActive = false; // Clear global flag
             currentPlayingChannel = null; // Clear current channel
+            currentChannelIndex = -1; // Clear channel index
             video.pause();
             
             if (hls) {
@@ -2139,12 +2178,13 @@
                 console.log('Back button - letting app exit');
             }
             
-            // When player is active, Enter/OK shows info banner, left/right navigate banner
+            // When player is active, Enter/OK/Up shows info banner, left/right navigate banner, channel up/down changes channel
             if (isPlayerActive) {
                 const banner = document.getElementById('channel-banner');
                 const isBannerVisible = banner && banner.classList.contains('visible');
                 
-                if (e.key === 'Enter' || e.keyCode === 13) {
+                // Enter/OK or Up key shows info banner
+                if (e.key === 'Enter' || e.keyCode === 13 || e.key === 'ArrowUp' || e.keyCode === 38) {
                     e.preventDefault();
                     e.stopPropagation();
                     e.stopImmediatePropagation();
@@ -2152,6 +2192,24 @@
                         console.log('Showing info banner for current channel');
                         showChannelBanner(currentPlayingChannel);
                     }
+                    return false;
+                }
+                
+                // Channel Up key (keyCode 427 on webOS/Samsung)
+                if (e.keyCode === 427) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    changeChannel(1);
+                    return false;
+                }
+                
+                // Channel Down key (keyCode 428 on webOS/Samsung)
+                if (e.keyCode === 428) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    changeChannel(-1);
                     return false;
                 }
                 
