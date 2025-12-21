@@ -602,6 +602,11 @@
             transform: translateY(100%);
             transition: transform 0.3s ease-out;
             z-index: 100;
+            min-height: 340px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            box-sizing: border-box;
         }
 
         .channel-banner.visible {
@@ -682,6 +687,7 @@
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
+            text-overflow: ellipsis;
             text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
         }
         
@@ -691,7 +697,6 @@
             background: rgba(0, 0, 0, 0.5);
             border-radius: 999px;
             overflow: hidden;
-            max-width: 90%;
         }
         
         .banner-progress-bar {
@@ -708,6 +713,7 @@
             align-items: center;
             justify-content: center;
             margin-top: 16px;
+            min-height: 32px;
         }
         
         .banner-indicator {
@@ -1508,14 +1514,11 @@
                     card.tabIndex = 0;
                     card.setAttribute('role', 'button');
                     card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
-                    
                     const currentProg = getCurrentProgram(channel.tvgId, channel.name);
-                    
                     if (hasEPG && currentProg) {
-                        const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                        const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                        const startTime = new Date(currentProg.start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
                         const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
-                        
                         card.innerHTML = `
                             <div class="channel-info">
                                 <div class="channel-name">${escapeHtml(channel.name)}</div>
@@ -1767,8 +1770,8 @@
                 bannerHasNext = !!nextProg;
                 
                 if (currentProg) {
-                    const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const startTime = new Date(currentProg.start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
                     const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
                     
                     epgTitle.textContent = currentProg.title;
@@ -1795,8 +1798,8 @@
                 
                 // Populate next program data
                 if (nextProg) {
-                    const startTime = new Date(nextProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                    const stopTime = nextProg.stop ? new Date(nextProg.stop).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const startTime = new Date(nextProg.start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const stopTime = nextProg.stop ? new Date(nextProg.stop).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
                     const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
                     
                     nextTitle.textContent = nextProg.title;
@@ -2191,6 +2194,20 @@
                     if (currentPlayingChannel) {
                         console.log('Showing info banner for current channel');
                         showChannelBanner(currentPlayingChannel);
+                    }
+                    return false;
+                }
+
+                // Down key hides info banner
+                if ((e.key === 'ArrowDown' || e.keyCode === 40) && isBannerVisible) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    console.log('Hiding info banner via Down key');
+                    banner.classList.remove('visible');
+                    if (bannerTimeout) {
+                        clearTimeout(bannerTimeout);
+                        bannerTimeout = null;
                     }
                     return false;
                 }
