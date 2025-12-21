@@ -14,7 +14,7 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-            background: radial-gradient(circle at top, #1e293b 0, #020617 55%, #000 100%);
+            background: #0f172a;
             color: #f9fafb;
             font-size: 28px;
             line-height: 1.6;
@@ -24,6 +24,8 @@
             max-width: 95%;
             margin: 0 auto;
             padding: 24px 40px 32px;
+            min-height: 100vh;
+            background: rgba(15, 23, 42, 0.3);
         }
         
         h1 {
@@ -228,6 +230,10 @@
         
         .channel-grid {
             margin-top: 18px;
+            min-height: 400px;
+            background: rgba(15, 23, 42, 0.3);
+            padding: 20px;
+            border-radius: 10px;
         }
         
         .channel-group-section {
@@ -792,7 +798,15 @@
                     grid.appendChild(section);
                 });
             } else {
-                // Single category view - no grouping needed
+                // Single category view - use same structure as "All" for consistency
+                const section = document.createElement('div');
+                section.className = 'channel-group-section';
+                
+                const header = document.createElement('div');
+                header.className = 'group-header';
+                header.textContent = `${selectedCategory} (${filtered.length})`;
+                section.appendChild(header);
+                
                 const groupGrid = document.createElement('div');
                 groupGrid.className = 'group-channels';
                 
@@ -813,7 +827,8 @@
                     groupGrid.appendChild(card);
                 });
                 
-                grid.appendChild(groupGrid);
+                section.appendChild(groupGrid);
+                grid.appendChild(section);
             }
         }
         
