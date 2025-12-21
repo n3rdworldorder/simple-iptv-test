@@ -5,6 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simple IPTV Test</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        // Prevent default back button behavior when player is active
+        var playerActive = false;
+        var backButtonHandled = false;
+        
+        // Override history.back to intercept back button
+        var originalBack = window.history.back;
+        window.history.back = function() {
+            console.log('history.back called, playerActive:', window.playerActive);
+            if (window.playerActive) {
+                console.log('Intercepting back - closing player');
+                // Trigger our close player logic
+                var closeEvent = new CustomEvent('closePlayer');
+                document.dispatchEvent(closeEvent);
+                return;
+            }
+            // Otherwise, call original
+            originalBack.call(window.history);
+        };
+        
+        document.addEventListener('webOSLaunch', function() {
+            console.log('webOS Launch event');
+        });
+        document.addEventListener('webOSRelaunch', function() {
+            console.log('webOS Relaunch event - bringing app to foreground');
+            if (window.playerActive) {
+                // App was relaunched while player active
+                console.log('Player was active, staying in player view');
+            }
+        });
+    </script>
     <style>
         * {
             margin: 0;
@@ -398,7 +429,7 @@
         .player-header {
             background: linear-gradient(90deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.9));
             padding: 14px 18px;
-            display: flex;
+            display: none;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #020617;
@@ -435,6 +466,7 @@
             border-radius: 4px;
             font-size: 12px;
             font-family: monospace;
+            display: none;
         }
         
         .env-info {
@@ -505,6 +537,57 @@
             color: #9ca3af;
             letter-spacing: 0.08em;
             text-transform: uppercase;
+        }
+
+        .channel-banner {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.85), transparent);
+            padding: 40px 50px 50px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease-out;
+            z-index: 100;
+        }
+
+        .channel-banner.visible {
+            transform: translateY(0);
+        }
+
+        .banner-channel-name {
+            font-size: 42px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+
+        .banner-epg-title {
+            font-size: 36px;
+            font-weight: 600;
+            color: #60a5fa;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+        }
+
+        .banner-epg-time {
+            font-size: 28px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+        }
+
+        .banner-epg-desc {
+            font-size: 26px;
+            color: #d1d5db;
+            line-height: 1.5;
+            max-width: 90%;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
         }
     </style>
 </head>
@@ -577,7 +660,13 @@
             <button id="close-player" tabindex="0">Close (Press Back)</button>
         </div>
         <div class="video-info" id="video-info">Loading...</div>
-        <video id="video-player" controls autoplay></video>
+        <video id="video-player" autoplay></video>
+        <div class="channel-banner" id="channel-banner">
+            <div class="banner-channel-name" id="banner-channel-name"></div>
+            <div class="banner-epg-title" id="banner-epg-title"></div>
+            <div class="banner-epg-time" id="banner-epg-time"></div>
+            <div class="banner-epg-desc" id="banner-epg-desc"></div>
+        </div>
     </div>
 
     <script>
@@ -1295,6 +1384,54 @@
             updateStatus(`Showing ${mode === 'vod' ? 'VOD' : 'Live TV'} channels`);
         }
         
+        // Show channel banner with EPG info
+        function showChannelBanner(channel) {
+            const banner = document.getElementById('channel-banner');
+            const channelName = document.getElementById('banner-channel-name');
+            const epgTitle = document.getElementById('banner-epg-title');
+            const epgTime = document.getElementById('banner-epg-time');
+            const epgDesc = document.getElementById('banner-epg-desc');
+            
+            if (!banner) return;
+            
+            // Set channel name
+            channelName.textContent = channel.name;
+            
+            // Only show EPG for live TV
+            if (channel.type === 'live' && Object.keys(epgData).length > 0) {
+                const currentProg = getCurrentProgram(channel.tvgId, channel.name);
+                
+                if (currentProg) {
+                    const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                    const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
+                    
+                    epgTitle.textContent = currentProg.title;
+                    epgTime.textContent = timeStr;
+                    epgDesc.textContent = currentProg.desc || '';
+                    epgTitle.style.display = 'block';
+                    epgTime.style.display = 'block';
+                    epgDesc.style.display = currentProg.desc ? 'block' : 'none';
+                } else {
+                    epgTitle.style.display = 'none';
+                    epgTime.style.display = 'none';
+                    epgDesc.style.display = 'none';
+                }
+            } else {
+                epgTitle.style.display = 'none';
+                epgTime.style.display = 'none';
+                epgDesc.style.display = 'none';
+            }
+            
+            // Show banner
+            banner.classList.add('visible');
+            
+            // Hide after 7 seconds
+            setTimeout(() => {
+                banner.classList.remove('visible');
+            }, 7000);
+        }
+        
         // Play channel
         function playChannel(channel) {
             const playerContainer = document.getElementById('player-container');
@@ -1303,7 +1440,11 @@
             
             console.log('Playing channel:', channel.name, 'URL:', channel.url);
             
+            // Add history state so back button works within app
+            window.history.pushState({ player: true, channel: channel.name }, '', '');
+            
             playerContainer.classList.add('active');
+            window.playerActive = true; // Set global flag
             title.textContent = channel.name;
             
             // Clean up previous HLS instance
@@ -1381,6 +1522,13 @@
                 console.log('Video can play');
             };
             
+            // Show channel banner when video starts playing (removed fullscreen request)
+            video.onplaying = () => {
+                console.log('Video is playing');
+                // Show channel banner with EPG info
+                showChannelBanner(channel);
+            };
+            
             updateStatus(`Playing: ${channel.name}`);
         }
         
@@ -1389,7 +1537,9 @@
             const playerContainer = document.getElementById('player-container');
             const video = document.getElementById('video-player');
             
+            console.log('closePlayer called');
             playerContainer.classList.remove('active');
+            window.playerActive = false; // Clear global flag
             video.pause();
             
             if (hls) {
@@ -1492,6 +1642,24 @@
         document.getElementById('clear-btn').onclick = clearCache;
         document.getElementById('close-player').onclick = closePlayer;
         document.getElementById('settings-btn').onclick = toggleSettings;
+        
+        // Listen for custom closePlayer event from history.back override
+        document.addEventListener('closePlayer', function() {
+            console.log('Custom closePlayer event triggered');
+            closePlayer();
+        });
+        
+        // Handle popstate (back button via history API)
+        window.addEventListener('popstate', function(e) {
+            console.log('popstate event:', e.state);
+            const playerContainer = document.getElementById('player-container');
+            const isPlayerActive = playerContainer && playerContainer.classList.contains('active');
+            
+            if (isPlayerActive) {
+                console.log('Back button pressed while player active - closing player');
+                closePlayer();
+            }
+        });
 
         const modeLiveBtn = document.getElementById('mode-live');
         const modeVodBtn = document.getElementById('mode-vod');
@@ -1502,6 +1670,54 @@
             modeVodBtn.onclick = () => setMode('vod');
         }
         
+        // Handle webOS back button using webOSDev API
+        if (window.webOSDev) {
+            console.log('webOSDev detected, setting up back button handler');
+            window.webOSDev.WEBOS_SERVICE_SUBSCRIPTION = false;
+            
+            // Override the back button behavior
+            window.addEventListener('keydown', function(e) {
+                const playerContainer = document.getElementById('player-container');
+                const isPlayerActive = playerContainer && playerContainer.classList.contains('active');
+                console.log('webOSDev keydown:', e.keyCode, 'Player active:', isPlayerActive);
+                
+                if (e.keyCode === 461 && isPlayerActive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    closePlayer();
+                }
+            }, true);
+        }
+        
+        // Handle webOS back button at window level
+        window.addEventListener('keydown', (e) => {
+            const playerContainer = document.getElementById('player-container');
+            const isPlayerActive = playerContainer && playerContainer.classList.contains('active');
+            console.log('Window keydown:', e.key, e.keyCode, 'Player active:', isPlayerActive);
+            
+            if (e.keyCode === 461 && isPlayerActive) {
+                e.preventDefault();
+                e.stopPropagation();
+                closePlayer();
+                return false;
+            }
+        }, true);
+        
+        // Try to prevent app closure when player is active
+        window.onbeforeunload = function(e) {
+            const playerContainer = document.getElementById('player-container');
+            const isPlayerActive = playerContainer && playerContainer.classList.contains('active');
+            console.log('Before unload, player active:', isPlayerActive);
+            
+            if (isPlayerActive) {
+                closePlayer();
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
+        };
+        
         // Remote control navigation
         document.addEventListener('keydown', (e) => {
             const playerContainer = document.getElementById('player-container');
@@ -1509,20 +1725,25 @@
             const settingsPanel = document.getElementById('settings-panel');
             const isSettingsOpen = settingsPanel && !settingsPanel.hasAttribute('hidden');
             
+            console.log('Key pressed:', e.key, 'keyCode:', e.keyCode, 'Player active:', isPlayerActive);
+            
             // Back button - Exit player or close settings
-            if (e.key === 'Escape' || e.key === 'Backspace' || e.keyCode === 461) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                if (isPlayerActive) {
-                    closePlayer();
+            // Support multiple key codes: Escape, Backspace, webOS Back (461), Samsung Back (10009)
+            if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'Back' || e.keyCode === 461 || e.keyCode === 10009 || e.keyCode === 27 || e.keyCode === 8) {
+                if (isPlayerActive || isSettingsOpen) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    console.log('Back button intercepted, closing player/settings');
+                    if (isPlayerActive) {
+                        closePlayer();
+                    } else if (isSettingsOpen) {
+                        toggleSettings();
+                    }
                     return false;
                 }
-                if (isSettingsOpen) {
-                    toggleSettings();
-                    return false;
-                }
-                return false;
+                // Don't prevent default if nothing is open - let the app exit normally
+                console.log('Back button - letting app exit');
             }
             
             // Don't handle navigation when player is active
