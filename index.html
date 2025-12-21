@@ -301,6 +301,16 @@
             letter-spacing: 0.13em;
         }
         
+        .channel-epg {
+            margin-top: 8px;
+            color: #60a5fa;
+            font-size: 16px;
+            font-style: italic;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
         #player-container {
             display: none;
             position: fixed;
@@ -450,6 +460,15 @@
                     <button id="load-btn" tabindex="0">Load Playlist</button>
                     <button id="clear-btn" tabindex="0">Clear Cache</button>
                 </div>
+                <div class="controls">
+                    <input 
+                        type="text" 
+                        id="epg-url" 
+                        placeholder="Enter EPG URL (optional)"
+                        value="https://scoasttech.net:2096/xmltv.php?username=shane.wilson.75@gmail.com&password=CV7OJYb6jV"
+                    />
+                    <button id="load-epg-btn" tabindex="0">Load EPG</button>
+                </div>
                 <div class="env-info" id="env-info"></div>
             </div>
         </div>
@@ -494,6 +513,7 @@
         let hls = null;
         let selectedCategory = 'All';
         let currentMode = 'live'; // 'live' or 'vod'
+        let epgData = {}; // Store EPG data by channel ID
         
         function detectChannelType(name, group) {
             const text = ((name || '') + ' ' + (group || '')).toLowerCase();
@@ -574,6 +594,131 @@
             return channels.filter(ch => ch.type !== 'vod');
         }
 
+        // Parse XMLTV EPG data
+        function parseXMLTV(xmlContent) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+            const programmes = xmlDoc.getElementsByTagName('programme');
+            const epg = {};
+            
+            for (let i = 0; i < programmes.length; i++) {
+                const prog = programmes[i];
+                const channel = prog.getAttribute('channel');
+                const start = prog.getAttribute('start');
+                const stop = prog.getAttribute('stop');
+                
+                const titleEl = prog.getElementsByTagName('title')[0];
+                const descEl = prog.getElementsByTagName('desc')[0];
+                
+                if (!channel || !start) continue;
+                
+                const title = titleEl ? titleEl.textContent : 'Unknown';
+                const desc = descEl ? descEl.textContent : '';
+                
+                // Convert XMLTV time format (YYYYMMDDHHmmss +TZ) to timestamp
+                const startTime = parseXMLTVTime(start);
+                const stopTime = stop ? parseXMLTVTime(stop) : null;
+                
+                if (!epg[channel]) epg[channel] = [];
+                epg[channel].push({
+                    title,
+                    desc,
+                    start: startTime,
+                    stop: stopTime
+                });
+            }
+            
+            // Sort programs by start time
+            Object.keys(epg).forEach(channel => {
+                epg[channel].sort((a, b) => a.start - b.start);
+            });
+            
+            return epg;
+        }
+        
+        function parseXMLTVTime(xmltvTime) {
+            // Format: YYYYMMDDHHmmss +HHMM
+            const year = xmltvTime.substring(0, 4);
+            const month = xmltvTime.substring(4, 6);
+            const day = xmltvTime.substring(6, 8);
+            const hour = xmltvTime.substring(8, 10);
+            const minute = xmltvTime.substring(10, 12);
+            const second = xmltvTime.substring(12, 14);
+            
+            const dateStr = `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+            return new Date(dateStr).getTime();
+        }
+        
+        function getCurrentProgram(channelId) {
+            if (!epgData[channelId]) return null;
+            
+            const now = Date.now();
+            const programs = epgData[channelId];
+            
+            for (let i = 0; i < programs.length; i++) {
+                const prog = programs[i];
+                if (prog.start <= now && (!prog.stop || prog.stop >= now)) {
+                    return prog;
+                }
+            }
+            
+            return null;
+        }
+        
+        // Load EPG from URL
+        async function loadEPG() {
+            const url = document.getElementById('epg-url').value;
+            if (!url) {
+                updateStatus('Error: Please enter an EPG URL');
+                return;
+            }
+            
+            updateStatus('Loading EPG data...');
+            startProgress();
+            updateProgress(10);
+            
+            try {
+                let fetchUrl = url;
+                const host = (window.location && window.location.hostname) || '';
+                if (host === 'localhost' || host === '127.0.0.1') {
+                    fetchUrl = `/proxy?url=${encodeURIComponent(url)}`;
+                }
+
+                const response = await fetch(fetchUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                updateProgress(40);
+                const content = await response.text();
+
+                updateProgress(70);
+                epgData = parseXMLTV(content);
+                
+                const channelCount = Object.keys(epgData).length;
+                if (channelCount === 0) {
+                    throw new Error('No EPG data found');
+                }
+                
+                // Save EPG data to localStorage
+                try {
+                    localStorage.setItem('simple-iptv-epg', JSON.stringify(epgData));
+                    localStorage.setItem('simple-iptv-epg-url', url);
+                } catch (e) {
+                    console.warn('Could not cache EPG data:', e);
+                }
+                
+                updateProgress(100);
+                updateStatus(`Loaded EPG data for ${channelCount} channels`);
+                finishProgress();
+                
+                // Re-render channels to show EPG info
+                renderChannels();
+            } catch (error) {
+                updateStatus(`EPG Error: ${error.message}`);
+                console.error(error);
+                finishProgress(true);
+            }
+        }
+
         // Load channels from localStorage
         function loadFromCache() {
             const cached = localStorage.getItem('simple-iptv-channels');
@@ -588,6 +733,24 @@
                     console.error('Cache corrupted:', e);
                     localStorage.clear();
                 }
+            }
+            
+            // Load cached EPG data
+            const cachedEPG = localStorage.getItem('simple-iptv-epg');
+            if (cachedEPG) {
+                try {
+                    epgData = JSON.parse(cachedEPG);
+                } catch (e) {
+                    console.error('EPG cache corrupted:', e);
+                    localStorage.removeItem('simple-iptv-epg');
+                }
+            }
+            
+            // Restore EPG URL
+            const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
+            if (cachedEPGUrl) {
+                const epgInput = document.getElementById('epg-url');
+                if (epgInput) epgInput.value = cachedEPGUrl;
             }
         }
         
@@ -604,15 +767,18 @@
                     const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
                     const logoMatch = line.match(/tvg-logo="([^"]+)"/);
                     const groupMatch = line.match(/group-title="([^"]+)"/);
+                    const tvgIdMatch = line.match(/tvg-id="([^"]+)"/);
                     
                     const name = nameMatch ? (nameMatch[1] || 'Unknown') : 'Unknown';
                     const group = groupMatch ? groupMatch[1] : 'General';
+                    const tvgId = tvgIdMatch ? tvgIdMatch[1] : null;
 
                     currentChannel = {
                         name: name,
                         // Don't store logos to save space
                         group: group,
-                        type: detectChannelType(name, group)
+                        type: detectChannelType(name, group),
+                        tvgId: tvgId
                     };
                 } else if (line && !line.startsWith('#') && currentChannel) {
                     currentChannel.url = line;
@@ -783,9 +949,17 @@
                         card.tabIndex = 0;
                         card.setAttribute('role', 'button');
                         card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
+                        
+                        let epgHtml = '';
+                        const currentProg = getCurrentProgram(channel.tvgId || channel.name);
+                        if (currentProg) {
+                            epgHtml = `<div class="channel-epg">${escapeHtml(currentProg.title)}</div>`;
+                        }
+                        
                         card.innerHTML = `
                             <div class="channel-name">${escapeHtml(channel.name)}</div>
                             <div class="channel-group">${escapeHtml(channel.group)}</div>
+                            ${epgHtml}
                         `;
                         card.onclick = () => playChannel(channel);
                         card.onkeydown = (e) => {
@@ -816,9 +990,17 @@
                     card.tabIndex = 0;
                     card.setAttribute('role', 'button');
                     card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
+                    
+                    let epgHtml = '';
+                    const currentProg = getCurrentProgram(channel.tvgId || channel.name);
+                    if (currentProg) {
+                        epgHtml = `<div class="channel-epg">${escapeHtml(currentProg.title)}</div>`;
+                    }
+                    
                     card.innerHTML = `
                         <div class="channel-name">${escapeHtml(channel.name)}</div>
                         <div class="channel-group">${escapeHtml(channel.group)}</div>
+                        ${epgHtml}
                     `;
                     card.onclick = () => playChannel(channel);
                     card.onkeydown = (e) => {
@@ -1069,6 +1251,7 @@
         
         // Event listeners
         document.getElementById('load-btn').onclick = loadPlaylist;
+        document.getElementById('load-epg-btn').onclick = loadEPG;
         document.getElementById('clear-btn').onclick = clearCache;
         document.getElementById('close-player').onclick = closePlayer;
         document.getElementById('settings-btn').onclick = toggleSettings;
