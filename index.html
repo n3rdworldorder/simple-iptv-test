@@ -597,8 +597,8 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.85), transparent);
-            padding: 40px 50px 50px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.4));
+            padding: 30px 50px 35px;
             transform: translateY(100%);
             transition: transform 0.3s ease-out;
             z-index: 100;
@@ -607,27 +607,51 @@
         .channel-banner.visible {
             transform: translateY(0);
         }
+        
+        .banner-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
 
         .banner-channel-name {
             font-size: 42px;
             font-weight: 700;
             color: #ffffff;
-            margin-bottom: 12px;
             text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+            flex: 1;
+        }
+        
+        .banner-datetime {
+            font-size: 32px;
+            color: #9ca3af;
+            text-align: right;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+            white-space: nowrap;
+            margin-left: 40px;
+        }
+        
+        .banner-datetime .banner-time {
+            color: #60a5fa;
+            font-size: 36px;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 4px;
         }
 
         .banner-epg-title {
             font-size: 36px;
             font-weight: 600;
             color: #60a5fa;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
         }
 
         .banner-epg-time {
             font-size: 28px;
             color: #9ca3af;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
         }
 
@@ -641,6 +665,23 @@
             -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
             text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+        }
+        
+        .banner-progress {
+            margin-top: 12px;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 999px;
+            overflow: hidden;
+            max-width: 90%;
+        }
+        
+        .banner-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0ea5e9, #22c55e);
+            border-radius: 999px;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(34, 197, 235, 0.65);
         }
     </style>
 </head>
@@ -721,10 +762,19 @@
         <div class="video-info" id="video-info">Loading...</div>
         <video id="video-player" autoplay></video>
         <div class="channel-banner" id="channel-banner">
-            <div class="banner-channel-name" id="banner-channel-name"></div>
+            <div class="banner-header">
+                <div class="banner-channel-name" id="banner-channel-name"></div>
+                <div class="banner-datetime" id="banner-datetime">
+                    <span class="banner-time" id="banner-time"></span>
+                    <span id="banner-date"></span>
+                </div>
+            </div>
             <div class="banner-epg-title" id="banner-epg-title"></div>
             <div class="banner-epg-time" id="banner-epg-time"></div>
             <div class="banner-epg-desc" id="banner-epg-desc"></div>
+            <div class="banner-progress" id="banner-progress" style="display: none;">
+                <div class="banner-progress-bar" id="banner-progress-bar" style="width: 0%;"></div>
+            </div>
         </div>
     </div>
 
@@ -1521,11 +1571,31 @@
             const epgTitle = document.getElementById('banner-epg-title');
             const epgTime = document.getElementById('banner-epg-time');
             const epgDesc = document.getElementById('banner-epg-desc');
+            const progressContainer = document.getElementById('banner-progress');
+            const progressBar = document.getElementById('banner-progress-bar');
+            const bannerTime = document.getElementById('banner-time');
+            const bannerDate = document.getElementById('banner-date');
             
             if (!banner) return;
             
             // Set channel name
             channelName.textContent = channel.name;
+            
+            // Set current date and time
+            const now = new Date();
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            const dayName = days[now.getDay()];
+            const month = months[now.getMonth()];
+            const date = now.getDate();
+            const year = now.getFullYear();
+            
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            if (bannerTime) bannerTime.textContent = `${hours}:${minutes}`;
+            if (bannerDate) bannerDate.textContent = `${dayName} ${month} ${date} ${year}`;
             
             // Only show EPG for live TV
             if (channel.type === 'live' && Object.keys(epgData).length > 0) {
@@ -1542,15 +1612,30 @@
                     epgTitle.style.display = 'block';
                     epgTime.style.display = 'block';
                     epgDesc.style.display = currentProg.desc ? 'block' : 'none';
+                    
+                    // Calculate and show progress bar
+                    if (currentProg.start && currentProg.stop) {
+                        const now = Date.now();
+                        const duration = currentProg.stop - currentProg.start;
+                        const elapsed = now - currentProg.start;
+                        const progress = Math.max(0, Math.min(100, (elapsed / duration) * 100));
+                        
+                        progressBar.style.width = progress + '%';
+                        progressContainer.style.display = 'block';
+                    } else {
+                        progressContainer.style.display = 'none';
+                    }
                 } else {
                     epgTitle.style.display = 'none';
                     epgTime.style.display = 'none';
                     epgDesc.style.display = 'none';
+                    progressContainer.style.display = 'none';
                 }
             } else {
                 epgTitle.style.display = 'none';
                 epgTime.style.display = 'none';
                 epgDesc.style.display = 'none';
+                progressContainer.style.display = 'none';
             }
             
             // Show banner
