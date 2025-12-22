@@ -2917,6 +2917,41 @@
                     return;
                 }
 
+                // Special-case horizontal navigation when a channel card is focused:
+                if (focusedDefault && focusedDefault.classList && focusedDefault.classList.contains('channel-card') && (e.key === 'ArrowLeft' || e.keyCode === 37 || e.key === 'ArrowRight' || e.keyCode === 39)) {
+                    const cards = Array.from(document.querySelectorAll('.channel-card')).filter(el => el.offsetParent !== null);
+                    const rect = focusedDefault.getBoundingClientRect();
+                    // Prefer cards in the same visual row (top within tolerance)
+                    const sameRow = cards.filter(c => Math.abs(c.getBoundingClientRect().top - rect.top) < Math.max(8, rect.height * 0.6));
+                    const candidates = sameRow.length > 0 ? sameRow : cards;
+                    const dir = (e.key === 'ArrowRight' || e.keyCode === 39) ? 1 : -1;
+                    let best = null; let bestDist = Infinity;
+                    candidates.forEach(c => {
+                        if (c === focusedDefault) return;
+                        const r = c.getBoundingClientRect();
+                        // Ignore elements strictly behind in the opposite direction
+                        const dx = (dir === 1) ? (r.left - rect.right) : (rect.left - r.right);
+                        if (dx < -8) return;
+                        const dist = Math.abs(r.left - rect.left) + Math.abs(r.top - rect.top) * 0.5;
+                        if (dist < bestDist) { bestDist = dist; best = c; }
+                    });
+                    if (best) { e.preventDefault(); e.stopPropagation(); best.focus(); best.scrollIntoView({behavior:'smooth', block:'nearest', inline:'nearest'}); return; }
+                    // Fallback to category buttons if no nearby card
+                    const cats = Array.from(document.querySelectorAll('.category-btn')).filter(el => el.offsetParent !== null);
+                    if (cats.length > 0) {
+                        let bestCat = null; let bestCatDist = Infinity;
+                        const centerX = (rect.left + rect.right) / 2;
+                        cats.forEach(c => {
+                            const r = c.getBoundingClientRect();
+                            const vd = Math.abs(r.top - rect.top);
+                            const hd = Math.abs((r.left + r.right) / 2 - centerX);
+                            const score = hd + vd * 2; // prefer vertical alignment
+                            if (score < bestCatDist) { bestCatDist = score; bestCat = c; }
+                        });
+                        if (bestCat) { e.preventDefault(); e.stopPropagation(); bestCat.focus(); bestCat.scrollIntoView({behavior:'smooth', block:'nearest', inline:'nearest'}); return; }
+                    }
+                }
+
                 // Get all focusable elements
                 const allElements = Array.from(document.querySelectorAll('.category-btn, .channel-card'));
                 const currentIndex = allElements.indexOf(focusedDefault);
