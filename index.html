@@ -1374,14 +1374,57 @@
                 const response = await fetch(fetchUrl);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
+                // Stream the playlist so we can report bytes downloaded
+                const contentLength = response.headers.get('Content-Length');
+                const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+                let loaded = 0;
+                const reader = response.body && response.body.getReader ? response.body.getReader() : null;
+                const chunks = [];
+
                 updateProgress(35);
                 updateSettingsProgress(35, 'Downloading playlist...');
-                const content = await response.text();
+
+                if (reader) {
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        loaded += value.length || value.byteLength || 0;
+
+                        const loadedKB = (loaded / 1024).toFixed(1);
+                        if (totalBytes > 0) {
+                            const totalKB = (totalBytes / 1024).toFixed(1);
+                            const percent = Math.min(60, 35 + Math.floor((loaded / totalBytes) * 25));
+                            updateProgress(percent);
+                            updateStatus(`Downloading playlist... ${loadedKB} KB / ${totalKB} KB`);
+                            updateSettingsProgress(percent, `Downloading playlist... ${loadedKB} KB / ${totalKB} KB`);
+                        } else {
+                            const percent = Math.min(60, 35 + Math.floor((loaded / (1024 * 100)) * 25));
+                            updateProgress(percent);
+                            updateStatus(`Downloading playlist... ${loadedKB} KB`);
+                            updateSettingsProgress(percent, `Downloading playlist... ${loadedKB} KB`);
+                        }
+                    }
+
+                    // Combine chunks into string
+                    const allChunks = new Uint8Array(loaded);
+                    let position = 0;
+                    for (const chunk of chunks) {
+                        allChunks.set(chunk, position);
+                        position += chunk.length || chunk.byteLength || 0;
+                    }
+                    var content = new TextDecoder('utf-8').decode(allChunks);
+                } else {
+                    // Fallback for environments without streaming support
+                    var content = await response.text();
+                    loaded = content.length;
+                }
 
                 updateProgress(60);
                 updateSettingsProgress(60, 'Preparing to parse...');
                 // Provide incremental parsing progress (maps 0..1 -> 60..85)
                 const estimatedTotal = (content.match(/#EXTINF:/g) || []).length;
+                const totalDownloadedKB = (loaded / 1024).toFixed(1);
                 channels = parseM3U(content, 1000, (p, parsedCount) => {
                     const pct = 60 + Math.round(p * 25);
                     updateProgress(pct);
@@ -1389,11 +1432,11 @@
                     const spinner = document.getElementById('load-spinner');
                     if (spinner) spinner.style.display = 'inline-block';
                     if (estimatedTotal > 0) {
-                        const text = `Parsing playlist... (${parsedCount} / ${estimatedTotal})`;
+                        const text = `Parsing playlist... (${parsedCount} / ${estimatedTotal}) — ${totalDownloadedKB} KB`;
                         updateStatus(text);
                         updateSettingsProgress(pct, text);
                     } else {
-                        const text = `Parsing playlist... (${parsedCount} channels)`;
+                        const text = `Parsing playlist... (${parsedCount} channels) — ${totalDownloadedKB} KB`;
                         updateStatus(text);
                         updateSettingsProgress(pct, text);
                     }
