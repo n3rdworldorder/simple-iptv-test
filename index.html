@@ -562,7 +562,7 @@
             padding: 8px;
             background: #222;
             border-radius: 4px;
-            font-size: 13px;
+            font-size: 26px;
             font-family: monospace;
             color: #aaa;
             word-break: break-all;
@@ -1179,19 +1179,19 @@
                     chunks.push(value);
                     loaded += value.length;
                     
-                    const loadedKB = (loaded / 1024).toFixed(1);
+                    const loadedMB = (loaded / (1024 * 1024)).toFixed(2);
                     if (total > 0) {
-                        const totalKB = (total / 1024).toFixed(1);
+                        const totalMB = (total / (1024 * 1024)).toFixed(2);
                         const percent = Math.min(90, 10 + (loaded / total) * 60);
                         updateProgress(percent);
-                        updateStatus(`Downloading EPG data... ${loadedKB} KB / ${totalKB} KB`);
-                        updateSettingsEPGProgress(percent, `Downloading EPG data... ${loadedKB} KB / ${totalKB} KB`);
+                        updateStatus(`Downloading EPG data... ${loadedMB} MB / ${totalMB} MB`);
+                        updateSettingsEPGProgress(percent, `Downloading EPG data... ${loadedMB} MB / ${totalMB} MB`);
                     } else {
-                        updateStatus(`Downloading EPG data... ${loadedKB} KB`);
+                        updateStatus(`Downloading EPG data... ${loadedMB} MB`);
                         // Animate progress without total
-                        const percent = Math.min(60, 10 + (loaded / (1024 * 100)) * 50);
+                        const percent = Math.min(60, 10 + (loaded / (1024 * 1024 * 100)) * 50);
                         updateProgress(percent);
-                        updateSettingsEPGProgress(percent, `Downloading EPG data... ${loadedKB} KB`);
+                        updateSettingsEPGProgress(percent, `Downloading EPG data... ${loadedMB} MB`);
                     }
                 }
                 
@@ -1391,18 +1391,18 @@
                         chunks.push(value);
                         loaded += value.length || value.byteLength || 0;
 
-                        const loadedKB = (loaded / 1024).toFixed(1);
+                        const loadedMB = (loaded / (1024 * 1024)).toFixed(2);
                         if (totalBytes > 0) {
-                            const totalKB = (totalBytes / 1024).toFixed(1);
+                            const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
                             const percent = Math.min(60, 35 + Math.floor((loaded / totalBytes) * 25));
                             updateProgress(percent);
-                            updateStatus(`Downloading playlist... ${loadedKB} KB / ${totalKB} KB`);
-                            updateSettingsProgress(percent, `Downloading playlist... ${loadedKB} KB / ${totalKB} KB`);
+                            updateStatus(`Downloading playlist... ${loadedMB} MB / ${totalMB} MB`);
+                            updateSettingsProgress(percent, `Downloading playlist... ${loadedMB} MB / ${totalMB} MB`);
                         } else {
-                            const percent = Math.min(60, 35 + Math.floor((loaded / (1024 * 100)) * 25));
+                            const percent = Math.min(60, 35 + Math.floor((loaded / (1024 * 1024 * 100)) * 25));
                             updateProgress(percent);
-                            updateStatus(`Downloading playlist... ${loadedKB} KB`);
-                            updateSettingsProgress(percent, `Downloading playlist... ${loadedKB} KB`);
+                            updateStatus(`Downloading playlist... ${loadedMB} MB`);
+                            updateSettingsProgress(percent, `Downloading playlist... ${loadedMB} MB`);
                         }
                     }
 
@@ -1424,7 +1424,21 @@
                 updateSettingsProgress(60, 'Preparing to parse...');
                 // Provide incremental parsing progress (maps 0..1 -> 60..85)
                 const estimatedTotal = (content.match(/#EXTINF:/g) || []).length;
-                const totalDownloadedKB = (loaded / 1024).toFixed(1);
+                const totalDownloadedMB = (loaded / (1024 * 1024)).toFixed(2);
+                // Show downloaded summary for at least 2 seconds before parsing
+                try {
+                    const downloadMsg = estimatedTotal > 0
+                        ? `Downloaded ${totalDownloadedMB} MB — ${estimatedTotal} items found`
+                        : `Downloaded ${totalDownloadedMB} MB`;
+                    updateProgress(65);
+                    updateStatus(downloadMsg);
+                    updateSettingsProgress(65, downloadMsg);
+                    // Ensure message is visible for minimum 2s
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                } catch (e) {
+                    // ignore if sleep fails
+                }
+
                 channels = parseM3U(content, 1000, (p, parsedCount) => {
                     const pct = 60 + Math.round(p * 25);
                     updateProgress(pct);
@@ -1432,11 +1446,11 @@
                     const spinner = document.getElementById('load-spinner');
                     if (spinner) spinner.style.display = 'inline-block';
                     if (estimatedTotal > 0) {
-                        const text = `Parsing playlist... (${parsedCount} / ${estimatedTotal}) — ${totalDownloadedKB} KB`;
+                        const text = `Parsing playlist... (${parsedCount} / ${estimatedTotal}) — ${totalDownloadedMB} MB`;
                         updateStatus(text);
                         updateSettingsProgress(pct, text);
                     } else {
-                        const text = `Parsing playlist... (${parsedCount} channels) — ${totalDownloadedKB} KB`;
+                        const text = `Parsing playlist... (${parsedCount} channels) — ${totalDownloadedMB} MB`;
                         updateStatus(text);
                         updateSettingsProgress(pct, text);
                     }
