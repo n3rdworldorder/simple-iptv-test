@@ -192,6 +192,15 @@
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.9);
         }
 
+        .settings-btn.highlighted,
+        .settings-btn.highlighted:focus {
+            box-shadow: 0 14px 38px rgba(14,165,233,0.35), 0 6px 18px rgba(14,165,233,0.18) !important;
+            transform: translateY(-2px) scale(1.02) !important;
+            border: 1px solid rgba(14,165,233,0.9) !important;
+            background: linear-gradient(135deg, #0ea5e9, #22c1c3) !important;
+            color: #02131f !important;
+        }
+
         .settings-panel {
             display: none;
             position: fixed;
@@ -293,9 +302,9 @@
         .progress-container.small .progress-bar { height: 100%; background: linear-gradient(90deg,#60a5fa,#3b82f6); width: 0%; transition: width 120ms linear; }
 
         /* Larger loading text in settings */
-        #settings-import-status-text { font-size: 20px; font-weight: 700; color: #e6eefc; }
+        #settings-import-status-text { font-size: 30px; font-weight: 700; color: #e6eefc; }
         /* EPG progress text in settings */
-        #settings-epg-status-text { font-size: 20px; font-weight: 700; color: #e6eefc; }
+        #settings-epg-status-text { font-size: 30px; font-weight: 700; color: #e6eefc; }
         /* Larger status while loading on main screen */
         .status-large { font-size: 34px; font-weight: 700; }
 
@@ -791,7 +800,7 @@
                     <div class="progress-container small" id="settings-import-progress">
                         <div class="progress-bar" id="settings-import-progress-bar"></div>
                     </div>
-                    <div id="settings-import-status-text" style="margin-top:6px; color:#cbd5e1; font-size:13px;">Waiting</div>
+                    <div id="settings-import-status-text" style="margin-top:6px; color:#cbd5e1;">Waiting</div>
                 </div>
                 <h2 class="settings-section-title">EPG (Program Guide)</h2>
                 <div class="controls">
@@ -807,7 +816,7 @@
                     <div class="progress-container small" id="settings-epg-progress">
                         <div class="progress-bar" id="settings-epg-progress-bar"></div>
                     </div>
-                    <div id="settings-epg-status-text" style="margin-top:6px; color:#cbd5e1; font-size:13px;">Waiting</div>
+                    <div id="settings-epg-status-text" style="margin-top:6px; color:#cbd5e1;">Waiting</div>
                 </div>
                 <h2 class="settings-section-title">Environment Info</h2>
                 <div class="env-info" id="env-info"></div>
@@ -2259,6 +2268,27 @@
             renderChannels();
             renderCategories();
             updateStatus('Cache cleared');
+            // Restore sensible focus so remote D-pad navigation still works
+            try {
+                const settingsBtn = document.getElementById('settings-btn');
+                if (settingsBtn && typeof settingsBtn.focus === 'function') {
+                    // Small delay to allow DOM updates to finish
+                    setTimeout(() => {
+                        settingsBtn.focus();
+                        // Add a short-lived highlight so remote users see the focus target
+                        settingsBtn.classList.add('highlighted');
+                        setTimeout(() => settingsBtn.classList.remove('highlighted'), 3600);
+                    }, 40);
+                } else {
+                    // Fallback: focus the landing container
+                    const landing = document.getElementById('landing');
+                    if (landing && typeof landing.focus === 'function') {
+                        setTimeout(() => landing.focus(), 40);
+                    }
+                }
+            } catch (e) {
+                console.warn('Could not restore focus after clearing cache', e);
+            }
         }
 
         // Settings navigation
@@ -2628,11 +2658,30 @@
             }
         }, true); // Use capture phase to intercept events before webOS
         
+        // Helper: focus + visually highlight the settings button for a short duration
+        function highlightSettingsButton(duration = 3600) {
+            try {
+                const btn = document.getElementById('settings-btn');
+                if (!btn) return;
+                if (typeof btn.focus === 'function') btn.focus();
+                btn.classList.add('highlighted');
+                setTimeout(() => {
+                    try { btn.classList.remove('highlighted'); } catch (e) {}
+                }, duration);
+            } catch (e) {
+                console.warn('highlightSettingsButton failed', e);
+            }
+        }
+
         // Load cached channels on startup and show environment info
         showEnvironmentInfo();
         loadFromCache();
         // Ensure UI state (mode toggle visibility) reflects current channel data
         renderChannels();
+        // If we started with no cached channels, make the Settings button obvious
+        if (!channels || channels.length === 0) {
+            setTimeout(() => highlightSettingsButton(3600), 60);
+        }
         
         // Auto-load EPG if URL is configured
         const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
