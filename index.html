@@ -1792,6 +1792,7 @@
                     const header = document.createElement('div');
                     header.className = 'group-header';
                     header.tabIndex = 0;
+                    header.dataset.categorySlug = slugify(groupName);
                     header.textContent = `${groupName} (${groupedChannels[groupName].length})`;
                     header.onclick = () => {
                         selectedCategory = groupName;
@@ -1799,6 +1800,13 @@
                         pageState[groupName] = 0;
                         renderCategories();
                         renderChannels();
+                        // Focus the matching category button so left/right moves between categories (synchronous)
+                        try {
+                            const btn = document.querySelector(`[data-category-slug="${groupName.replace(/[^a-z0-9_-]/gi, '_')}"]`);
+                            if (btn) { try { btn.focus(); } catch (err) {} }
+                        } catch (e) {
+                            // ignore
+                        }
                     };
                     header.onkeydown = (e) => { if (e.key === 'Enter') header.onclick(); };
                     section.appendChild(header);
@@ -1867,6 +1875,10 @@
         }
         
         // Render category buttons
+        function slugify(text) {
+            return String(text || '').replace(/[^a-z0-9_-]/gi, '_');
+        }
+
         function renderCategories() {
             const container = document.getElementById('categories');
             if (!container) return;
@@ -1888,6 +1900,8 @@
             
             categories.forEach(category => {
                 const btn = document.createElement('button');
+                const slug = slugify(category);
+                btn.dataset.categorySlug = slug;
                 btn.className = 'category-btn' + (category === selectedCategory ? ' active' : '');
                 const count = category === 'All'
                     ? base.length
@@ -1898,16 +1912,16 @@
                     selectedCategory = category;
                     // Reset pagination state when switching categories
                     pageState[category] = 0;
+                    // Re-render categories and channels
                     renderCategories();
                     renderChannels();
                     updateStatus(`Showing ${category} ${currentMode === 'vod' ? 'VOD' : 'Live TV'} channels`);
-                    // Keep focus on the clicked category button
-                    const targetBtn = e.currentTarget;
-                    if (targetBtn) {
-                        setTimeout(() => {
-                            targetBtn.focus();
-                        }, 0);
-                    }
+                    // Focus the newly created category button by slug (the old element may have been replaced)
+                    try {
+                        const slugLocal = slug;
+                        const newBtn = container.querySelector(`[data-category-slug="${slugLocal}"]`);
+                        if (newBtn) { try { newBtn.focus(); } catch (err) {} }
+                    } catch (e) {}
                 };
                 container.appendChild(btn);
             });
@@ -2854,6 +2868,48 @@
 
                 // Default navigation across category buttons and channel cards
                 const focusedDefault = document.activeElement;
+                // If a group header is focused and user pressed left/right, move among category buttons
+                if (focusedDefault && focusedDefault.classList && focusedDefault.classList.contains('group-header') && (e.key === 'ArrowLeft' || e.keyCode === 37 || e.key === 'ArrowRight' || e.keyCode === 39)) {
+                    const cats = Array.from(document.querySelectorAll('.category-btn'));
+                    // try to match by slug
+                    const slug = focusedDefault.dataset.categorySlug;
+                    let idx = cats.findIndex(b => b.dataset && b.dataset.categorySlug === slug);
+                    if (idx === -1) {
+                        // fallback: match by text prefix
+                        idx = cats.findIndex(b => focusedDefault.textContent && b.textContent && b.textContent.startsWith(focusedDefault.textContent.split(' (')[0]));
+                    }
+                    if (idx !== -1) {
+                        const dir = (e.key === 'ArrowRight' || e.keyCode === 39) ? 1 : -1;
+                        let nextIdx = idx + dir;
+                        if (nextIdx < 0) nextIdx = 0;
+                        if (nextIdx >= cats.length) nextIdx = cats.length - 1;
+                        if (nextIdx !== idx) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cats[nextIdx].focus();
+                            cats[nextIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                        }
+                    }
+                    return;
+                }
+                // If a category button is focused and user pressed left/right, move among category buttons only
+                if (focusedDefault && focusedDefault.classList && focusedDefault.classList.contains('category-btn') && (e.key === 'ArrowLeft' || e.keyCode === 37 || e.key === 'ArrowRight' || e.keyCode === 39)) {
+                    const cats = Array.from(document.querySelectorAll('.category-btn'));
+                    const idx = cats.indexOf(focusedDefault);
+                    if (idx !== -1) {
+                        const dir = (e.key === 'ArrowRight' || e.keyCode === 39) ? 1 : -1;
+                        let nextIdx = idx + dir;
+                        if (nextIdx < 0) nextIdx = 0;
+                        if (nextIdx >= cats.length) nextIdx = cats.length - 1;
+                        if (nextIdx !== idx) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cats[nextIdx].focus();
+                            cats[nextIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                        }
+                    }
+                    return;
+                }
                 if (!focusedDefault || (!focusedDefault.classList.contains('channel-card') && !focusedDefault.classList.contains('category-btn'))) {
                     // Focus first element if nothing is focused
                     const firstCard = document.querySelector('.channel-card');
@@ -2947,12 +3003,8 @@
                 if (spinner) spinner.style.display = 'inline-block';
                 await loadFromCache();
                 // Ensure UI state (mode toggle visibility) reflects current channel data
-                // Use incremental renderer at startup so users see progress for large lists
-                if (typeof renderChannelsIncremental === 'function') {
-                    await renderChannelsIncremental(CHANNEL_RENDER_BATCH_SIZE, CHANNEL_RENDER_DELAY_MS);
-                } else {
-                    renderChannels();
-                }
+                // Use paginated renderer (renderChannels) at startup to avoid building full DOM
+                renderChannels();
                 // If we started with no cached channels, make the Settings button obvious
                 if (!channels || channels.length === 0) {
                     setTimeout(() => highlightSettingsButton(3600), 60);
