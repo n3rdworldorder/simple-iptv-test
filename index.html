@@ -1283,7 +1283,8 @@
         
         // Parse M3U content with optional progress callback
         // onProgress receives (fraction 0..1, parsedCount)
-        function parseM3U(content, maxChannels = 1000, onProgress) {
+        // maxChannels defaults to Infinity (no limit). Guard checks use isFinite().
+        function parseM3U(content, maxChannels = Infinity, onProgress) {
             const lines = content.split('\n');
             const parsed = [];
             let currentChannel = null;
@@ -1317,8 +1318,8 @@
                     parsed.push(currentChannel);
                     currentChannel = null;
 
-                    // Limit channels to prevent quota errors
-                    if (parsed.length >= maxChannels) {
+                    // Respect a maximum channel cap only when it's a finite number
+                    if (isFinite(maxChannels) && parsed.length >= maxChannels) {
                         console.log(`Limiting to ${maxChannels} channels to save storage`);
                         break;
                     }
@@ -1439,7 +1440,7 @@
                     // ignore if sleep fails
                 }
 
-                channels = parseM3U(content, 1000, (p, parsedCount) => {
+                channels = parseM3U(content, Infinity, (p, parsedCount) => {
                     const pct = 60 + Math.round(p * 25);
                     updateProgress(pct);
                     // Update status with parsed channel count and estimated total and show spinner
@@ -1547,11 +1548,10 @@
             const bar = document.getElementById('settings-import-progress-bar');
             const statusText = document.getElementById('settings-import-status-text');
             if (!wrapper || !bar) return;
+            // Leave the settings progress UI visible after completion so the status message remains
             if (!isError) bar.style.width = '100%';
-            setTimeout(() => {
-                if (wrapper) wrapper.style.display = 'none';
-                if (statusText) statusText.textContent = '';
-            }, 700);
+            if (isError) wrapper.classList.add('error'); else wrapper.classList.remove('error');
+            // Do not auto-hide the wrapper; allow status message to stay on screen
         }
 
         // Lightweight EPG progress helpers (separate from playlist progress)
@@ -1581,11 +1581,10 @@
             const bar = document.getElementById('settings-epg-progress-bar');
             const statusText = document.getElementById('settings-epg-status-text');
             if (!wrapper || !bar) return;
+            // Keep EPG progress visible after completion so the status message remains
             if (!isError) bar.style.width = '100%';
-            setTimeout(() => {
-                if (wrapper) wrapper.style.display = 'none';
-                if (statusText) statusText.textContent = '';
-            }, 700);
+            if (isError) wrapper.classList.add('error'); else wrapper.classList.remove('error');
+            // Do not auto-hide the wrapper; allow status to remain until user action
         }
 
         function updateProgress(value) {
@@ -1598,12 +1597,13 @@
         function finishProgress(isError) {
             const container = document.getElementById('import-progress');
             if (!container) return;
+            // Keep the main import progress bar visible after completion so the status message stays
             if (!isError) {
                 updateProgress(100);
             }
-            setTimeout(() => {
-                container.style.display = 'none';
-            }, 600);
+            // Ensure container remains visible; mark error state if needed
+            container.style.display = 'block';
+            if (isError) container.classList.add('error'); else container.classList.remove('error');
         }
 
         // Control mode-toggle visibility and persist preference
@@ -2325,6 +2325,34 @@
             renderChannels();
             renderCategories();
             updateStatus('Cache cleared');
+            // Hide any in-progress import UI and reset progress bars/text
+            try {
+                const importContainer = document.getElementById('import-progress');
+                if (importContainer) importContainer.style.display = 'none';
+
+                const settingsWrapper = document.getElementById('settings-import-status');
+                if (settingsWrapper) {
+                    settingsWrapper.style.display = 'none';
+                    const bar = document.getElementById('settings-import-progress-bar');
+                    if (bar) bar.style.width = '0%';
+                    const statusText = document.getElementById('settings-import-status-text');
+                    if (statusText) statusText.textContent = '';
+                }
+
+                const settingsEpgWrapper = document.getElementById('settings-epg-import-status');
+                if (settingsEpgWrapper) {
+                    settingsEpgWrapper.style.display = 'none';
+                    const bar2 = document.getElementById('settings-epg-progress-bar');
+                    if (bar2) bar2.style.width = '0%';
+                    const statusText2 = document.getElementById('settings-epg-status-text');
+                    if (statusText2) statusText2.textContent = '';
+                }
+
+                const spinner = document.getElementById('load-spinner');
+                if (spinner) spinner.style.display = 'none';
+            } catch (e) {
+                console.warn('Could not reset import UI on clear', e);
+            }
             // Restore sensible focus so remote D-pad navigation still works
             try {
                 const settingsBtn = document.getElementById('settings-btn');
