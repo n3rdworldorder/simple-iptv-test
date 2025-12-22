@@ -1257,24 +1257,84 @@
             }
         }
 
-        // Load channels from localStorage
-        function loadFromCache() {
-            const cached = localStorage.getItem('simple-iptv-channels');
-            if (cached) {
-                try {
-                    channels = JSON.parse(cached);
-                    channels = normalizeChannelTypes(channels);
-                    renderChannels();
-                    renderCategories();
-                    updateStatus(`Loaded ${channels.length} channels from cache`);
-                } catch (e) {
-                    console.error('Cache corrupted:', e);
-                    localStorage.clear();
+        // IndexedDB helpers (simple KV store) - fallback to localStorage when unavailable
+        function openDb() {
+            return new Promise((resolve, reject) => {
+                if (!window.indexedDB) return resolve(null);
+                const req = indexedDB.open('simple-iptv', 1);
+                req.onupgradeneeded = function(e) {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('kv')) {
+                        db.createObjectStore('kv', { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        }
+
+        async function saveToIDB(key, value) {
+            try {
+                const db = await openDb();
+                if (!db) throw new Error('IndexedDB unavailable');
+                return new Promise((res, rej) => {
+                    const tx = db.transaction('kv', 'readwrite');
+                    const store = tx.objectStore('kv');
+                    const req = store.put({ id: key, value: value });
+                    req.onsuccess = () => { res(true); db.close(); };
+                    req.onerror = (e) => { res(false); db.close(); };
+                });
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function loadFromIDB(key) {
+            try {
+                const db = await openDb();
+                if (!db) return null;
+                return new Promise((res, rej) => {
+                    const tx = db.transaction('kv', 'readonly');
+                    const store = tx.objectStore('kv');
+                    const req = store.get(key);
+                    req.onsuccess = () => { res(req.result ? req.result.value : null); db.close(); };
+                    req.onerror = () => { res(null); db.close(); };
+                });
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Load channels from IndexedDB or localStorage (async)
+        async function loadFromCache() {
+            // Try IDB first
+            const idbChannels = await loadFromIDB('channels');
+            if (idbChannels && Array.isArray(idbChannels) && idbChannels.length > 0) {
+                channels = idbChannels;
+                channels = normalizeChannelTypes(channels);
+                renderChannels();
+                renderCategories();
+                updateStatus(`Loaded ${channels.length} channels from cache (IndexedDB)`);
+            } else {
+                // Fallback to localStorage
+                const cached = localStorage.getItem('simple-iptv-channels');
+                if (cached) {
+                    try {
+                        channels = JSON.parse(cached);
+                        channels = normalizeChannelTypes(channels);
+                        renderChannels();
+                        renderCategories();
+                        updateStatus(`Loaded ${channels.length} channels from cache (localStorage)`);
+                    } catch (e) {
+                        console.error('Cache corrupted:', e);
+                        localStorage.clear();
+                    }
                 }
             }
-            
-            // Restore EPG URL
-            const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
+
+            // Restore EPG URL (try IDB then localStorage)
+            const idbEpg = await loadFromIDB('epg-url');
+            const cachedEPGUrl = idbEpg || localStorage.getItem('simple-iptv-epg-url');
             if (cachedEPGUrl) {
                 const epgInput = document.getElementById('epg-url');
                 if (epgInput) epgInput.value = cachedEPGUrl;
@@ -1468,22 +1528,36 @@
                     throw new Error('No channels found in playlist');
                 }
                 
-                // Try to save to localStorage with quota handling
+                // Try to persist channels using IndexedDB first (better quotas)
                 try {
-                    localStorage.setItem('simple-iptv-channels', JSON.stringify(channels));
-                } catch (e) {
-                    if (e.name === 'QuotaExceededError') {
-                        updateStatus(`Warning: Storage quota exceeded. Using first 500 channels.`);
-                        channels = channels.slice(0, 500);
-                        try {
-                            localStorage.setItem('simple-iptv-channels', JSON.stringify(channels));
-                        } catch (e2) {
-                            updateStatus(`Error: Cannot store channels. Storage full.`);
-                            // Don't save, just display
+                    const saved = await saveToIDB('channels', channels);
+                    if (saved) {
+                        // Also persist EPG URL
+                        const epgInput = document.getElementById('epg-url');
+                        if (epgInput && epgInput.value) {
+                            await saveToIDB('epg-url', epgInput.value);
                         }
                     } else {
-                        throw e;
+                        // Fallback to localStorage with quota handling
+                        try {
+                            localStorage.setItem('simple-iptv-channels', JSON.stringify(channels));
+                        } catch (e) {
+                            if (e.name === 'QuotaExceededError') {
+                                updateStatus(`Warning: Storage quota exceeded. Using first 500 channels.`);
+                                channels = channels.slice(0, 500);
+                                try {
+                                    localStorage.setItem('simple-iptv-channels', JSON.stringify(channels));
+                                } catch (e2) {
+                                    updateStatus(`Error: Cannot store channels. Storage full.`);
+                                    // Don't save, just display
+                                }
+                            } else {
+                                throw e;
+                            }
+                        }
                     }
+                } catch (e) {
+                    console.warn('Persistence error:', e);
                 }
                 
                 updateProgress(85);
