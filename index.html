@@ -273,6 +273,30 @@
             margin: 14px 0 6px;
         }
 
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* smaller progress bar for settings panel */
+        .progress-container.small { height: 8px; border-radius: 6px; background: rgba(255,255,255,0.06); overflow: hidden; }
+        .progress-container.small .progress-bar { height: 100%; background: linear-gradient(90deg,#60a5fa,#3b82f6); width: 0%; transition: width 120ms linear; }
+
+        /* Larger loading text in settings */
+        #settings-import-status-text { font-size: 16px; font-weight: 600; color: #e6eefc; }
+        /* Larger status while loading on main screen */
+        .status-large { font-size: 16px; font-weight: 600; }
+
         .mode-btn {
             padding: 8px 18px;
         }
@@ -758,7 +782,14 @@
                         value="https://scoasttech.net:2096/get.php?username=shane.wilson.75@gmail.com&password=CV7OJYb6jV&type=m3u_plus&output=ts"
                     />
                     <button id="load-btn" tabindex="0">Load Playlist</button>
-                    <button id="clear-btn" tabindex="0">Clear Cache</button>
+                        <button id="clear-btn" tabindex="0">Clear Cache</button>
+                        <span id="load-spinner" class="spinner" style="display:none; margin-left:10px; vertical-align:middle;" aria-hidden="true"></span>
+                </div>
+                <div id="settings-import-status" style="display:none; margin-top:12px;">
+                    <div class="progress-container small" id="settings-import-progress">
+                        <div class="progress-bar" id="settings-import-progress-bar"></div>
+                    </div>
+                    <div id="settings-import-status-text" style="margin-top:6px; color:#cbd5e1; font-size:13px;">Waiting</div>
                 </div>
                 <h2 class="settings-section-title">EPG (Program Guide)</h2>
                 <div class="controls">
@@ -780,7 +811,7 @@
             <div class="progress-bar" id="import-progress-bar"></div>
         </div>
 
-        <div class="mode-toggle" id="mode-toggle" aria-label="Content type">
+        <div class="mode-toggle" id="mode-toggle" aria-label="Content type" style="display:none;">
             <button id="mode-live" class="category-btn mode-btn active" tabindex="0">Live TV</button>
             <button id="mode-vod" class="category-btn mode-btn" tabindex="0">VOD</button>
         </div>
@@ -1222,21 +1253,26 @@
             }
         }
         
-        // Parse M3U content
-        function parseM3U(content, maxChannels = 1000) {
+        // Parse M3U content with optional progress callback
+        // onProgress receives (fraction 0..1, parsedCount)
+        function parseM3U(content, maxChannels = 1000, onProgress) {
             const lines = content.split('\n');
             const parsed = [];
             let currentChannel = null;
-            
+
+            const total = lines.length || 1;
+            // Only update UI at intervals to avoid thrashing
+            const updateInterval = Math.max(1, Math.floor(total / 100));
+
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
-                
+
                 if (line.startsWith('#EXTINF:')) {
                     const nameMatch = line.match(/tvg-name="([^"]+)"/) || line.match(/,(.+)$/);
                     const logoMatch = line.match(/tvg-logo="([^"]+)"/);
                     const groupMatch = line.match(/group-title="([^"]+)"/);
                     const tvgIdMatch = line.match(/tvg-id="([^"]+)"/);
-                    
+
                     const name = nameMatch ? (nameMatch[1] || 'Unknown') : 'Unknown';
                     const group = groupMatch ? groupMatch[1] : 'General';
                     const tvgId = tvgIdMatch ? tvgIdMatch[1] : null;
@@ -1252,15 +1288,29 @@
                     currentChannel.url = line;
                     parsed.push(currentChannel);
                     currentChannel = null;
-                    
+
                     // Limit channels to prevent quota errors
                     if (parsed.length >= maxChannels) {
                         console.log(`Limiting to ${maxChannels} channels to save storage`);
                         break;
                     }
                 }
+
+                // report progress periodically
+                if (onProgress && (i % updateInterval === 0 || i === total - 1)) {
+                    try {
+                        onProgress(i / total, parsed.length);
+                    } catch (e) {
+                        // ignore progress callback errors
+                    }
+                }
             }
-            
+
+            // finished
+            if (onProgress) {
+                try { onProgress(1, parsed.length); } catch (e) {}
+            }
+
             return parsed;
         }
         
@@ -1272,6 +1322,15 @@
                 return;
             }
             
+            // Disable load button and show progress UI
+            const loadBtn = document.getElementById('load-btn');
+            if (loadBtn) loadBtn.disabled = true;
+            // Make main status text larger while loading
+            const mainStatus = document.getElementById('status');
+            if (mainStatus) mainStatus.classList.add('status-large');
+            // settings panel progress
+            startSettingsProgress();
+            updateSettingsProgress(10, 'Starting...');
             updateStatus('Loading playlist...');
             startProgress();
             updateProgress(10);
@@ -1288,10 +1347,29 @@
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
                 updateProgress(35);
+                updateSettingsProgress(35, 'Downloading playlist...');
                 const content = await response.text();
 
                 updateProgress(60);
-                channels = parseM3U(content);
+                updateSettingsProgress(60, 'Preparing to parse...');
+                // Provide incremental parsing progress (maps 0..1 -> 60..85)
+                const estimatedTotal = (content.match(/#EXTINF:/g) || []).length;
+                channels = parseM3U(content, 1000, (p, parsedCount) => {
+                    const pct = 60 + Math.round(p * 25);
+                    updateProgress(pct);
+                    // Update status with parsed channel count and estimated total and show spinner
+                    const spinner = document.getElementById('load-spinner');
+                    if (spinner) spinner.style.display = 'inline-block';
+                    if (estimatedTotal > 0) {
+                        const text = `Parsing playlist... (${parsedCount} / ${estimatedTotal})`;
+                        updateStatus(text);
+                        updateSettingsProgress(pct, text);
+                    } else {
+                        const text = `Parsing playlist... (${parsedCount} channels)`;
+                        updateStatus(text);
+                        updateSettingsProgress(pct, text);
+                    }
+                });
                 channels = normalizeChannelTypes(channels);
                 
                 // Log sample for debugging EPG matching
@@ -1323,15 +1401,30 @@
                 }
                 
                 updateProgress(85);
+                updateSettingsProgress(85, 'Saving channels...');
                 renderChannels();
                 renderCategories();
                 updateProgress(100);
-                updateStatus(`Loaded ${channels.length} channels successfully`);
+                const doneMsg = `Loaded ${channels.length} channels successfully`;
+                updateStatus(doneMsg);
+                updateSettingsProgress(100, doneMsg);
                 finishProgress();
+                finishSettingsProgress();
             } catch (error) {
-                updateStatus(`Error: ${error.message}`);
+                const errMsg = `Error: ${error.message}`;
+                updateStatus(errMsg);
+                updateSettingsProgress(100, errMsg);
                 console.error(error);
                 finishProgress(true);
+                finishSettingsProgress(true);
+            }
+            finally {
+                // Re-enable button regardless of success/failure
+                const loadBtnFinally = document.getElementById('load-btn');
+                if (loadBtnFinally) loadBtnFinally.disabled = false;
+                const spinnerFinally = document.getElementById('load-spinner');
+                if (spinnerFinally) spinnerFinally.style.display = 'none';
+                if (mainStatus) mainStatus.classList.remove('status-large');
             }
         }
 
@@ -1341,6 +1434,39 @@
             if (!container || !bar) return;
             bar.style.width = '0%';
             container.style.display = 'block';
+        }
+
+        // Settings-panel progress helpers
+        function startSettingsProgress() {
+            const container = document.getElementById('settings-import-progress');
+            const wrapper = document.getElementById('settings-import-status');
+            const statusText = document.getElementById('settings-import-status-text');
+            if (!container || !wrapper) return;
+            container.style.width = '100%';
+            container.firstElementChild.style.width = '0%';
+            wrapper.style.display = 'block';
+            if (statusText) statusText.textContent = 'Starting...';
+        }
+
+        function updateSettingsProgress(value, text) {
+            const bar = document.getElementById('settings-import-progress-bar');
+            const statusText = document.getElementById('settings-import-status-text');
+            if (!bar) return;
+            const clamped = Math.max(0, Math.min(100, value));
+            bar.style.width = clamped + '%';
+            if (statusText && typeof text === 'string') statusText.textContent = text;
+        }
+
+        function finishSettingsProgress(isError) {
+            const wrapper = document.getElementById('settings-import-status');
+            const bar = document.getElementById('settings-import-progress-bar');
+            const statusText = document.getElementById('settings-import-status-text');
+            if (!wrapper || !bar) return;
+            if (!isError) bar.style.width = '100%';
+            setTimeout(() => {
+                if (wrapper) wrapper.style.display = 'none';
+                if (statusText) statusText.textContent = '';
+            }, 700);
         }
 
         function updateProgress(value) {
@@ -1360,16 +1486,38 @@
                 container.style.display = 'none';
             }, 600);
         }
+
+        // Control mode-toggle visibility and persist preference
+        function setModeToggleVisibility(visible) {
+            const modeToggle = document.getElementById('mode-toggle');
+            if (!modeToggle) return;
+            modeToggle.style.display = visible ? 'flex' : 'none';
+            try {
+                localStorage.setItem('simple-iptv-mode-visible', visible ? '1' : '0');
+            } catch (e) {
+                // ignore storage errors
+            }
+        }
         
         // Render channel grid
         function renderChannels() {
             const grid = document.getElementById('channel-grid');
             const landing = document.getElementById('landing');
             const categoriesEl = document.getElementById('categories');
+            const modeToggle = document.getElementById('mode-toggle');
+            const statusEl = document.getElementById('status');
 
             if (!channels || channels.length === 0) {
                 if (grid) grid.style.display = 'none';
                 if (categoriesEl) categoriesEl.style.display = 'none';
+                // Hide mode toggle when there are no channels
+                if (typeof setModeToggleVisibility === 'function') {
+                    setModeToggleVisibility(false);
+                } else if (modeToggle) {
+                    modeToggle.style.display = 'none';
+                }
+                // Hide status banner on main screen when no channel data
+                if (statusEl) statusEl.style.display = 'none';
                 if (landing) landing.style.display = 'block';
                 grid.innerHTML = '';
                 return;
@@ -1377,6 +1525,14 @@
 
             if (landing) landing.style.display = 'none';
             if (grid) grid.style.display = 'block';
+            // Show status banner when channels are present
+            if (statusEl) statusEl.style.display = 'block';
+            // Show mode toggle when channels are present
+            if (typeof setModeToggleVisibility === 'function') {
+                setModeToggleVisibility(true);
+            } else if (modeToggle) {
+                modeToggle.style.display = 'flex';
+            }
             if (categoriesEl) categoriesEl.style.display = 'flex';
             grid.innerHTML = '';
             
@@ -2040,6 +2196,13 @@
             localStorage.clear();
             channels = [];
             selectedCategory = 'All';
+            // Hide Live TV / VOD mode buttons when cache is cleared in settings
+            if (typeof setModeToggleVisibility === 'function') {
+                setModeToggleVisibility(false);
+            } else {
+                const modeToggle = document.getElementById('mode-toggle');
+                if (modeToggle) modeToggle.style.display = 'none';
+            }
             renderChannels();
             renderCategories();
             updateStatus('Cache cleared');
@@ -2055,6 +2218,13 @@
             
             panel.classList.add('active');
             window.settingsActive = true;
+            // Focus first input in settings for remote navigation
+            setTimeout(() => {
+                const firstInput = panel.querySelector('#m3u-url, input, button');
+                if (firstInput && typeof firstInput.focus === 'function') {
+                    firstInput.focus();
+                }
+            }, 50);
         }
         
         function closeSettings() {
@@ -2275,32 +2445,92 @@
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                 e.preventDefault();
                 const focused = document.activeElement;
-                
-                if (!focused || (!focused.classList.contains('channel-card') && !focused.classList.contains('category-btn'))) {
+
+                // If settings panel is open, navigate among its focusable controls
+                if (isSettingsOpen) {
+                    const panel = settingsPanel;
+                    // collect visible focusable controls
+                    const selector = 'button, input, select, textarea, [tabindex]';
+                    const allElements = Array.from(panel.querySelectorAll(selector)).filter(el => {
+                        if (!(el.offsetParent !== null)) return false; // visible
+                        if (el.getAttribute('tabindex') === '-1') return false;
+                        return true;
+                    });
+
+                    // If nothing focused or focused element not in settings, focus first
+                    if (!focused || !panel.contains(focused)) {
+                        if (allElements.length > 0) allElements[0].focus();
+                        return;
+                    }
+
+                    const currentIndex = allElements.indexOf(focused);
+                    if (currentIndex === -1) return;
+
+                    const rect = focused.getBoundingClientRect();
+                    let bestIndex = -1;
+                    let bestDistance = Infinity;
+
+                    allElements.forEach((element, index) => {
+                        if (index === currentIndex) return;
+                        const targetRect = element.getBoundingClientRect();
+                        let isValid = false;
+                        let distance = 0;
+
+                        if (e.key === 'ArrowUp') {
+                            isValid = targetRect.bottom <= rect.top + 10;
+                            distance = rect.top - targetRect.bottom + Math.abs(targetRect.left - rect.left) * 0.3;
+                        } else if (e.key === 'ArrowDown') {
+                            isValid = targetRect.top >= rect.bottom - 10;
+                            distance = targetRect.top - rect.bottom + Math.abs(targetRect.left - rect.left) * 0.3;
+                        } else if (e.key === 'ArrowLeft') {
+                            isValid = targetRect.right <= rect.left + 10;
+                            distance = rect.left - targetRect.right + Math.abs(targetRect.top - rect.top) * 0.3;
+                        } else if (e.key === 'ArrowRight') {
+                            isValid = targetRect.left >= rect.right - 10;
+                            distance = targetRect.left - rect.right + Math.abs(targetRect.top - rect.top) * 0.3;
+                        }
+
+                        if (isValid && distance < bestDistance) {
+                            bestDistance = distance;
+                            bestIndex = index;
+                        }
+                    });
+
+                    if (bestIndex !== -1) {
+                        allElements[bestIndex].focus();
+                        allElements[bestIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+                    }
+
+                    return;
+                }
+
+                // Default navigation across category buttons and channel cards
+                const focusedDefault = document.activeElement;
+                if (!focusedDefault || (!focusedDefault.classList.contains('channel-card') && !focusedDefault.classList.contains('category-btn'))) {
                     // Focus first element if nothing is focused
                     const firstCard = document.querySelector('.channel-card');
                     if (firstCard) firstCard.focus();
                     return;
                 }
-                
+
                 // Get all focusable elements
                 const allElements = Array.from(document.querySelectorAll('.category-btn, .channel-card'));
-                const currentIndex = allElements.indexOf(focused);
-                
+                const currentIndex = allElements.indexOf(focusedDefault);
+
                 if (currentIndex === -1) return;
-                
-                const rect = focused.getBoundingClientRect();
+
+                const rect = focusedDefault.getBoundingClientRect();
                 let bestIndex = -1;
                 let bestDistance = Infinity;
-                
+
                 // Find best element in the direction
                 allElements.forEach((element, index) => {
                     if (index === currentIndex) return;
-                    
+
                     const targetRect = element.getBoundingClientRect();
                     let isValid = false;
                     let distance = 0;
-                    
+
                     if (e.key === 'ArrowUp') {
                         isValid = targetRect.bottom <= rect.top + 10;
                         distance = rect.top - targetRect.bottom + Math.abs(targetRect.left - rect.left) * 0.3;
@@ -2314,13 +2544,13 @@
                         isValid = targetRect.left >= rect.right - 10;
                         distance = targetRect.left - rect.right + Math.abs(targetRect.top - rect.top) * 0.3;
                     }
-                    
+
                     if (isValid && distance < bestDistance) {
                         bestDistance = distance;
                         bestIndex = index;
                     }
                 });
-                
+
                 if (bestIndex !== -1) {
                     allElements[bestIndex].focus();
                     allElements[bestIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
@@ -2331,7 +2561,15 @@
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const focused = document.activeElement;
-                if (focused) {
+                const settingsPanel = document.getElementById('settings-panel');
+                const isSettingsOpenLocal = settingsPanel && settingsPanel.classList.contains('active');
+                if (isSettingsOpenLocal && focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')) {
+                    // If Enter pressed while typing in settings input, trigger Load Playlist
+                    const loadBtnLocal = document.getElementById('load-btn');
+                    if (loadBtnLocal) {
+                        loadBtnLocal.click();
+                    }
+                } else if (focused) {
                     focused.click();
                 }
             }
@@ -2340,6 +2578,8 @@
         // Load cached channels on startup and show environment info
         showEnvironmentInfo();
         loadFromCache();
+        // Ensure UI state (mode toggle visibility) reflects current channel data
+        renderChannels();
         
         // Auto-load EPG if URL is configured
         const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
