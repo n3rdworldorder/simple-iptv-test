@@ -2,3 +2,6 @@
 node_modules/
 .DS_Store
 example_m3u_*.m3u
+
+# Temporary playlist used during debugging
+tmp_playlist.m3u

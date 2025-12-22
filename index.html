@@ -1037,11 +1037,18 @@
             if (onProgress) {
                 onProgress(total, total);
             }
-            
-            // Sort programs by start time
-            Object.keys(epg).forEach(channel => {
-                epg[channel].sort((a, b) => a.start - b.start);
-            });
+
+            // Sort programs by start time in small async batches to avoid blocking the UI
+            const epgChannels = Object.keys(epg);
+            const SORT_BATCH = 50; // tuneable
+            for (let i = 0; i < epgChannels.length; i += SORT_BATCH) {
+                const slice = epgChannels.slice(i, i + SORT_BATCH);
+                slice.forEach(channel => {
+                    epg[channel].sort((a, b) => a.start - b.start);
+                });
+                // yield to event loop so UI can update
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
             
             console.log('EPG data loaded for channels:', Object.keys(epg).slice(0, 10));
             console.log('Total EPG channels:', Object.keys(epg).length);
@@ -1305,10 +1312,33 @@
             }
         }
 
+        // Tunable settings for incremental rendering and IDB timeout (can be overridden via localStorage)
+        const CHANNEL_RENDER_BATCH_SIZE = parseInt(localStorage.getItem('simple-iptv-render-batch') || '200', 10);
+        const CHANNEL_RENDER_DELAY_MS = parseInt(localStorage.getItem('simple-iptv-render-delay') || '8', 10);
+        const IDB_TIMEOUT_MS = parseInt(localStorage.getItem('simple-iptv-idb-timeout') || '3000', 10);
+        const CHANNEL_PAGE_SIZE = parseInt(localStorage.getItem('simple-iptv-page-size') || '1000', 10);
+
+        // Pagination state per category to allow incremental 'load more'
+        const pageState = {};
+
+        function promiseWithTimeout(promise, ms) {
+            return Promise.race([
+                promise,
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+            ]);
+        }
+
         // Load channels from IndexedDB or localStorage (async)
         async function loadFromCache() {
             // Try IDB first
-            const idbChannels = await loadFromIDB('channels');
+            let idbChannels = null;
+            try {
+                idbChannels = await promiseWithTimeout(loadFromIDB('channels'), IDB_TIMEOUT_MS);
+            } catch (e) {
+                console.warn('IDB channels load timed out or failed, falling back to localStorage', e);
+                idbChannels = null;
+            }
+
             if (idbChannels && Array.isArray(idbChannels) && idbChannels.length > 0) {
                 channels = idbChannels;
                 channels = normalizeChannelTypes(channels);
@@ -1333,7 +1363,13 @@
             }
 
             // Restore EPG URL (try IDB then localStorage)
-            const idbEpg = await loadFromIDB('epg-url');
+            let idbEpg = null;
+            try {
+                idbEpg = await promiseWithTimeout(loadFromIDB('epg-url'), IDB_TIMEOUT_MS);
+            } catch (e) {
+                console.warn('IDB epg-url load timed out or failed, falling back to localStorage', e);
+                idbEpg = null;
+            }
             const cachedEPGUrl = idbEpg || localStorage.getItem('simple-iptv-epg-url');
             if (cachedEPGUrl) {
                 const epgInput = document.getElementById('epg-url');
@@ -1739,172 +1775,94 @@
                 return;
             }
             
-            // When "All" is selected, group channels by category
+            // When "All" is selected, show only category headers with small previews
             if (selectedCategory === 'All') {
-                // Debug EPG matching
-                if (Object.keys(epgData).length > 0) {
-                    console.log('EPG data available. First EPG channel:', Object.keys(epgData)[0]);
-                    console.log('First playlist channel:', filtered[0] ? filtered[0].name : 'none');
-                    console.log('First playlist tvgId:', filtered[0] ? filtered[0].tvgId : 'none');
-                }
-                
                 // Group channels by category
                 const groupedChannels = {};
                 filtered.forEach(channel => {
-                    if (!groupedChannels[channel.group]) {
-                        groupedChannels[channel.group] = [];
-                    }
+                    if (!groupedChannels[channel.group]) groupedChannels[channel.group] = [];
                     groupedChannels[channel.group].push(channel);
                 });
-                
-                // Sort group names
+
                 const sortedGroups = Object.keys(groupedChannels).sort();
-                
-                // Render each group
                 sortedGroups.forEach(groupName => {
                     const section = document.createElement('div');
                     section.className = 'channel-group-section';
-                    
+
                     const header = document.createElement('div');
                     header.className = 'group-header';
+                    header.tabIndex = 0;
                     header.textContent = `${groupName} (${groupedChannels[groupName].length})`;
+                    header.onclick = () => {
+                        selectedCategory = groupName;
+                        // Reset paging state when opening a category
+                        pageState[groupName] = 0;
+                        renderCategories();
+                        renderChannels();
+                    };
+                    header.onkeydown = (e) => { if (e.key === 'Enter') header.onclick(); };
                     section.appendChild(header);
-                    
-                    const groupGrid = document.createElement('div');
-                    const hasEPG = Object.keys(epgData).length > 0 && currentMode === 'live';
-                    groupGrid.className = hasEPG ? 'group-channels list-mode' : 'group-channels';
-                    
-                    groupedChannels[groupName].forEach(channel => {
-                        const card = document.createElement('div');
-                        card.className = hasEPG ? 'channel-card list-mode' : 'channel-card';
-                        card.tabIndex = 0;
-                        card.setAttribute('role', 'button');
-                        card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
-                        
-                        const currentProg = getCurrentProgram(channel.tvgId, channel.name);
-                        
-                        // Debug EPG matching for first few channels
-                        if (groupedChannels[groupName].indexOf(channel) < 2) {
-                            console.log(`Channel: ${channel.name}, tvgId: ${channel.tvgId || '(none)'}, EPG found:`, !!currentProg);
-                            if (currentProg) {
-                                console.log('  Program:', currentProg.title, 'Start:', new Date(currentProg.start));
-                            }
-                            // Try to find what EPG keys might match
-                            const allEpgKeys = Object.keys(epgData);
-                            const possibleMatches = allEpgKeys.filter(key => 
-                                key.toLowerCase().includes(channel.name.toLowerCase().substring(4, 10)) ||
-                                channel.name.toLowerCase().includes(key.toLowerCase().substring(0, 6))
-                            );
-                            if (possibleMatches.length > 0) {
-                                console.log('  Possible EPG matches:', possibleMatches.slice(0, 3));
-                            }
-                        }
-                        
-                        if (hasEPG && currentProg) {
-                            const startTime = new Date(currentProg.start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                            const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
-                            const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
-                            
-                            card.innerHTML = `
-                                <div class="channel-info">
-                                    <div class="channel-name">${escapeHtml(channel.name)}</div>
-                                    <div class="channel-group">${escapeHtml(channel.group)}</div>
-                                </div>
-                                <div class="epg-info">
-                                    <div class="epg-title">${escapeHtml(currentProg.title)}</div>
-                                    <div class="epg-time">${timeStr}</div>
-                                    ${currentProg.desc ? `<div class="epg-desc">${escapeHtml(currentProg.desc)}</div>` : ''}
-                                </div>
-                            `;
-                        } else if (hasEPG) {
-                            card.innerHTML = `
-                                <div class="channel-info">
-                                    <div class="channel-name">${escapeHtml(channel.name)}</div>
-                                    <div class="channel-group">${escapeHtml(channel.group)}</div>
-                                </div>
-                                <div class="epg-info">
-                                    <div class="epg-time" style="color: #6b7280;">No program info</div>
-                                </div>
-                            `;
-                        } else {
-                            card.innerHTML = `
-                                <div class="channel-name">${escapeHtml(channel.name)}</div>
-                                <div class="channel-group">${escapeHtml(channel.group)}</div>
-                            `;
-                        }
-                        
-                        card.onclick = () => playChannel(channel);
-                        card.onkeydown = (e) => {
-                            if (e.key === 'Enter') playChannel(channel);
-                        };
-                        groupGrid.appendChild(card);
-                    });
-                    
-                    section.appendChild(groupGrid);
+
+                    const preview = document.createElement('div');
+                    preview.className = 'group-channels preview';
+                    const previewItems = groupedChannels[groupName].slice(0, 3);
+                    previewItems.forEach(ch => preview.appendChild(createLightChannelCard(ch)));
+                    section.appendChild(preview);
+
+                    if (groupedChannels[groupName].length > previewItems.length) {
+                        const moreBtn = document.createElement('button');
+                        moreBtn.className = 'open-group-btn';
+                        moreBtn.textContent = `Open ${groupName} (${groupedChannels[groupName].length})`;
+                        moreBtn.onclick = header.onclick;
+                        section.appendChild(moreBtn);
+                    }
+
                     grid.appendChild(section);
                 });
-            } else {
-                // Single category view - use same structure as "All" for consistency
-                const section = document.createElement('div');
-                section.className = 'channel-group-section';
-                
-                const header = document.createElement('div');
-                header.className = 'group-header';
-                header.textContent = `${selectedCategory} (${filtered.length})`;
-                section.appendChild(header);
-                
-                const groupGrid = document.createElement('div');
-                const hasEPG = Object.keys(epgData).length > 0 && currentMode === 'live';
-                groupGrid.className = hasEPG ? 'group-channels list-mode' : 'group-channels';
-                
-                filtered.forEach((channel, index) => {
-                    const card = document.createElement('div');
-                    card.className = hasEPG ? 'channel-card list-mode' : 'channel-card';
-                    card.tabIndex = 0;
-                    card.setAttribute('role', 'button');
-                    card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
-                    const currentProg = getCurrentProgram(channel.tvgId, channel.name);
-                    if (hasEPG && currentProg) {
-                        const startTime = new Date(currentProg.start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-                        const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                        const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
-                        card.innerHTML = `
-                            <div class="channel-info">
-                                <div class="channel-name">${escapeHtml(channel.name)}</div>
-                                <div class="channel-group">${escapeHtml(channel.group)}</div>
-                            </div>
-                            <div class="epg-info">
-                                <div class="epg-title">${escapeHtml(currentProg.title)}</div>
-                                <div class="epg-time">${timeStr}</div>
-                                ${currentProg.desc ? `<div class="epg-desc">${escapeHtml(currentProg.desc)}</div>` : ''}
-                            </div>
-                        `;
-                    } else if (hasEPG) {
-                        card.innerHTML = `
-                            <div class="channel-info">
-                                <div class="channel-name">${escapeHtml(channel.name)}</div>
-                                <div class="channel-group">${escapeHtml(channel.group)}</div>
-                            </div>
-                            <div class="epg-info">
-                                <div class="epg-time" style="color: #6b7280;">No program info</div>
-                            </div>
-                        `;
-                    } else {
-                        card.innerHTML = `
-                            <div class="channel-name">${escapeHtml(channel.name)}</div>
-                            <div class="channel-group">${escapeHtml(channel.group)}</div>
-                        `;
-                    }
-                    
-                    card.onclick = () => playChannel(channel);
-                    card.onkeydown = (e) => {
-                        if (e.key === 'Enter') playChannel(channel);
-                    };
-                    groupGrid.appendChild(card);
-                });
-                
-                section.appendChild(groupGrid);
-                grid.appendChild(section);
+                return;
+            }
+
+            // Single category view — render paginated to avoid building huge DOM at once
+            const section = document.createElement('div');
+            section.className = 'channel-group-section';
+            const header = document.createElement('div');
+            header.className = 'group-header';
+            header.textContent = `${selectedCategory} (${filtered.length})`;
+            section.appendChild(header);
+
+            const groupGrid = document.createElement('div');
+            const hasEPG = Object.keys(epgData).length > 0 && currentMode === 'live';
+            groupGrid.className = hasEPG ? 'group-channels list-mode' : 'group-channels';
+            section.appendChild(groupGrid);
+            grid.appendChild(section);
+
+            const startIndex = pageState[selectedCategory] || 0;
+            const pageSize = Math.max(1, CHANNEL_PAGE_SIZE);
+            const slice = filtered.slice(startIndex, startIndex + pageSize);
+
+            // Append in a fragment for performance
+            const frag = document.createDocumentFragment();
+            slice.forEach(channel => frag.appendChild(createChannelCard(channel, hasEPG)));
+            groupGrid.appendChild(frag);
+
+            pageState[selectedCategory] = startIndex + slice.length;
+            updateStatus(`Rendered ${pageState[selectedCategory]} / ${filtered.length} channels in ${selectedCategory}`);
+
+            if (pageState[selectedCategory] < filtered.length) {
+                const loadMore = document.createElement('button');
+                loadMore.className = 'load-more-btn';
+                loadMore.textContent = `Load more (${Math.min(pageSize, filtered.length - pageState[selectedCategory])})`;
+                loadMore.onclick = () => {
+                    const nextStart = pageState[selectedCategory] || 0;
+                    const nextSlice = filtered.slice(nextStart, nextStart + pageSize);
+                    const frag2 = document.createDocumentFragment();
+                    nextSlice.forEach(channel => frag2.appendChild(createChannelCard(channel, hasEPG)));
+                    groupGrid.appendChild(frag2);
+                    pageState[selectedCategory] = nextStart + nextSlice.length;
+                    updateStatus(`Rendered ${pageState[selectedCategory]} / ${filtered.length} channels in ${selectedCategory}`);
+                    if (pageState[selectedCategory] >= filtered.length) loadMore.remove();
+                };
+                section.appendChild(loadMore);
             }
         }
         
@@ -1938,6 +1896,8 @@
                 btn.tabIndex = 0;
                 btn.onclick = (e) => {
                     selectedCategory = category;
+                    // Reset pagination state when switching categories
+                    pageState[category] = 0;
                     renderCategories();
                     renderChannels();
                     updateStatus(`Showing ${category} ${currentMode === 'vod' ? 'VOD' : 'Live TV'} channels`);
@@ -1951,6 +1911,152 @@
                 };
                 container.appendChild(btn);
             });
+        }
+
+        // Create a channel card element (used by incremental renderer)
+        function createChannelCard(channel, hasEPG) {
+            const card = document.createElement('div');
+            card.className = hasEPG ? 'channel-card list-mode' : 'channel-card';
+            card.tabIndex = 0;
+            card.setAttribute('role', 'button');
+            card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
+
+            const currentProg = getCurrentProgram(channel.tvgId, channel.name);
+            if (hasEPG && currentProg) {
+                const startTime = new Date(currentProg.start).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const stopTime = currentProg.stop ? new Date(currentProg.stop).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                const timeStr = stopTime ? `${startTime} - ${stopTime}` : startTime;
+                card.innerHTML = `
+                    <div class="channel-info">
+                        <div class="channel-name">${escapeHtml(channel.name)}</div>
+                        <div class="channel-group">${escapeHtml(channel.group)}</div>
+                    </div>
+                    <div class="epg-info">
+                        <div class="epg-title">${escapeHtml(currentProg.title)}</div>
+                        <div class="epg-time">${timeStr}</div>
+                        ${currentProg.desc ? `<div class="epg-desc">${escapeHtml(currentProg.desc)}</div>` : ''}
+                    </div>
+                `;
+            } else if (hasEPG) {
+                card.innerHTML = `
+                    <div class="channel-info">
+                        <div class="channel-name">${escapeHtml(channel.name)}</div>
+                        <div class="channel-group">${escapeHtml(channel.group)}</div>
+                    </div>
+                    <div class="epg-info">
+                        <div class="epg-time" style="color: #6b7280;">No program info</div>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div class="channel-name">${escapeHtml(channel.name)}</div>
+                    <div class="channel-group">${escapeHtml(channel.group)}</div>
+                `;
+            }
+
+            card.onclick = () => playChannel(channel);
+            card.onkeydown = (e) => { if (e.key === 'Enter') playChannel(channel); };
+            return card;
+        }
+
+        // Lightweight card used for previews (no EPG lookup)
+        function createLightChannelCard(channel) {
+            const card = document.createElement('div');
+            card.className = 'channel-card';
+            card.tabIndex = 0;
+            card.setAttribute('role', 'button');
+            card.setAttribute('aria-label', `${channel.name} (${channel.group})`);
+            card.innerHTML = `
+                <div class="channel-name">${escapeHtml(channel.name)}</div>
+                <div class="channel-group">${escapeHtml(channel.group)}</div>
+            `;
+            card.onclick = () => playChannel(channel);
+            card.onkeydown = (e) => { if (e.key === 'Enter') playChannel(channel); };
+            return card;
+        }
+
+        // Incremental channel renderer — processes channels in batches and updates status
+        async function renderChannelsIncremental(batchSize = 200, delay = 8) {
+            const grid = document.getElementById('channel-grid');
+            const landing = document.getElementById('landing');
+            const categoriesEl = document.getElementById('categories');
+            const modeToggle = document.getElementById('mode-toggle');
+            const statusEl = document.getElementById('status');
+
+            if (!channels || channels.length === 0) {
+                if (grid) grid.style.display = 'none';
+                if (categoriesEl) categoriesEl.style.display = 'none';
+                if (typeof setModeToggleVisibility === 'function') {
+                    setModeToggleVisibility(false);
+                } else if (modeToggle) {
+                    modeToggle.style.display = 'none';
+                }
+                if (statusEl) statusEl.style.display = 'none';
+                if (landing) landing.style.display = 'block';
+                grid.innerHTML = '';
+                return;
+            }
+
+            if (landing) landing.style.display = 'none';
+            if (grid) grid.style.display = 'block';
+            if (statusEl) statusEl.style.display = 'block';
+            if (typeof setModeToggleVisibility === 'function') {
+                setModeToggleVisibility(true);
+            } else if (modeToggle) {
+                modeToggle.style.display = 'flex';
+            }
+            if (categoriesEl) categoriesEl.style.display = 'flex';
+            grid.innerHTML = '';
+
+            const base = getChannelsForCurrentMode();
+            const filtered = selectedCategory === 'All' ? base : base.filter(ch => ch.group === selectedCategory);
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">No channels in this category</div>';
+                return;
+            }
+
+            // Prepare grouped structure and DOM sections (empty grids)
+            const groupedChannels = {};
+            filtered.forEach(channel => {
+                if (!groupedChannels[channel.group]) groupedChannels[channel.group] = [];
+                groupedChannels[channel.group].push(channel);
+            });
+
+            const sortedGroups = Object.keys(groupedChannels).sort();
+            const groupGridMap = {};
+            const hasEPG = Object.keys(epgData).length > 0 && currentMode === 'live';
+
+            sortedGroups.forEach(groupName => {
+                const section = document.createElement('div');
+                section.className = 'channel-group-section';
+                const header = document.createElement('div');
+                header.className = 'group-header';
+                header.textContent = `${groupName} (${groupedChannels[groupName].length})`;
+                section.appendChild(header);
+                const groupGrid = document.createElement('div');
+                groupGrid.className = hasEPG ? 'group-channels list-mode' : 'group-channels';
+                section.appendChild(groupGrid);
+                grid.appendChild(section);
+                groupGridMap[groupName] = groupGrid;
+            });
+
+            // Render channels in batches
+            const total = filtered.length;
+            let rendered = 0;
+            for (let i = 0; i < total; i += batchSize) {
+                const slice = filtered.slice(i, i + batchSize);
+                slice.forEach(channel => {
+                    const card = createChannelCard(channel, hasEPG);
+                    const target = groupGridMap[channel.group] || grid;
+                    target.appendChild(card);
+                    rendered++;
+                });
+                updateStatus(`Rendering channels: ${rendered}/${total}`);
+                // yield to the event loop so UI can update
+                await new Promise(res => setTimeout(res, delay));
+            }
+
+            updateStatus(`Loaded ${total} channels from cache`);
         }
 
         function setMode(mode) {
@@ -2834,23 +2940,37 @@
 
         // Load cached channels on startup and show environment info
         showEnvironmentInfo();
-        loadFromCache();
-        // Ensure UI state (mode toggle visibility) reflects current channel data
-        renderChannels();
-        // If we started with no cached channels, make the Settings button obvious
-        if (!channels || channels.length === 0) {
-            setTimeout(() => highlightSettingsButton(3600), 60);
-        }
-        
-        // Auto-load EPG if URL is configured
-        const cachedEPGUrl = localStorage.getItem('simple-iptv-epg-url');
-        if (cachedEPGUrl) {
-            console.log('Auto-loading EPG data from configured URL...');
-            setTimeout(() => {
-                loadEPG();
-            }, 1000); // Small delay to let the UI render first
-        }
-        
+        (async () => {
+            const spinner = document.getElementById('load-spinner');
+            try {
+                updateStatus('Loading channels from cache...');
+                if (spinner) spinner.style.display = 'inline-block';
+                await loadFromCache();
+                // Ensure UI state (mode toggle visibility) reflects current channel data
+                // Use incremental renderer at startup so users see progress for large lists
+                if (typeof renderChannelsIncremental === 'function') {
+                    await renderChannelsIncremental(CHANNEL_RENDER_BATCH_SIZE, CHANNEL_RENDER_DELAY_MS);
+                } else {
+                    renderChannels();
+                }
+                // If we started with no cached channels, make the Settings button obvious
+                if (!channels || channels.length === 0) {
+                    setTimeout(() => highlightSettingsButton(3600), 60);
+                }
+            } catch (e) {
+                console.error('Error while loading cache:', e);
+                updateStatus('Failed to load cached channels');
+            } finally {
+                if (spinner) spinner.style.display = 'none';
+            }
+            // After channels are rendered, auto-load EPG if configured
+            const cachedEPGUrlAfter = localStorage.getItem('simple-iptv-epg-url');
+            if (cachedEPGUrlAfter) {
+                console.log('Auto-loading EPG data from configured URL after channels loaded...');
+                setTimeout(() => { loadEPG(); }, 500);
+            }
+        })();
+
         console.log('Simple IPTV Test App Ready');
         console.log('Channels in cache:', channels.length);
     </script>
