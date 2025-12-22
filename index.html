@@ -143,7 +143,7 @@
             padding: 10px 12px;
             background: linear-gradient(90deg, rgba(56, 189, 248, 0.12), rgba(15, 23, 42, 0.95));
             border-radius: 8px;
-            font-size: 24px;
+            font-size: 28px;
             border: 1px solid #1f2937;
             color: #e5f3ff;
         }
@@ -295,7 +295,7 @@
         /* Larger loading text in settings */
         #settings-import-status-text { font-size: 16px; font-weight: 600; color: #e6eefc; }
         /* Larger status while loading on main screen */
-        .status-large { font-size: 16px; font-weight: 600; }
+        .status-large { font-size: 34px; font-weight: 700; }
 
         .mode-btn {
             padding: 8px 18px;
@@ -801,6 +801,12 @@
                     />
                     <button id="load-epg-btn" tabindex="0">Load EPG</button>
                 </div>
+                <div id="settings-epg-import-status" style="display:none; margin-top:12px;">
+                    <div class="progress-container small" id="settings-epg-progress">
+                        <div class="progress-bar" id="settings-epg-progress-bar"></div>
+                    </div>
+                    <div id="settings-epg-status-text" style="margin-top:6px; color:#cbd5e1; font-size:13px;">Waiting</div>
+                </div>
                 <h2 class="settings-section-title">Environment Info</h2>
                 <div class="env-info" id="env-info"></div>
             </div>
@@ -1132,6 +1138,9 @@
             updateStatus('Downloading EPG data...');
             startProgress();
             updateProgress(10);
+            // Show EPG progress in settings panel (non-invasive)
+            startSettingsEPGProgress();
+            updateSettingsEPGProgress(10, 'Starting EPG download...');
             
             try {
                 let fetchUrl = url;
@@ -1165,11 +1174,13 @@
                         const percent = Math.min(90, 10 + (loaded / total) * 60);
                         updateProgress(percent);
                         updateStatus(`Downloading EPG data... ${loadedKB} KB / ${totalKB} KB`);
+                        updateSettingsEPGProgress(percent, `Downloading EPG data... ${loadedKB} KB / ${totalKB} KB`);
                     } else {
                         updateStatus(`Downloading EPG data... ${loadedKB} KB`);
                         // Animate progress without total
                         const percent = Math.min(60, 10 + (loaded / (1024 * 100)) * 50);
                         updateProgress(percent);
+                        updateSettingsEPGProgress(percent, `Downloading EPG data... ${loadedKB} KB`);
                     }
                 }
                 
@@ -1184,6 +1195,7 @@
 
                 updateProgress(70);
                 updateStatus('Parsing EPG data...');
+                updateSettingsEPGProgress(70, 'Parsing EPG data...');
                 
                 // Small delay to ensure status is visible
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -1193,6 +1205,7 @@
                     const percent = 70 + Math.floor((current / total) * 25);
                     updateProgress(percent);
                     updateStatus(`Parsing EPG data... ${current.toLocaleString()} / ${total.toLocaleString()} programs`);
+                    updateSettingsEPGProgress(percent, `Parsing EPG data... ${current.toLocaleString()} / ${total.toLocaleString()} programs`);
                 });
                 
                 const channelCount = Object.keys(epgData).length;
@@ -1218,14 +1231,18 @@
                 
                 updateProgress(100);
                 updateStatus(`Loaded EPG data for ${channelCount} channels`);
+                updateSettingsEPGProgress(100, `Loaded EPG data for ${channelCount} channels`);
                 finishProgress();
+                finishSettingsEPGProgress();
                 
                 // Re-render channels to show EPG info
                 renderChannels();
             } catch (error) {
                 updateStatus(`EPG Error: ${error.message}`);
+                updateSettingsEPGProgress(100, `EPG Error: ${error.message}`);
                 console.error(error);
                 finishProgress(true);
+                finishSettingsEPGProgress(true);
             }
         }
 
@@ -1461,6 +1478,40 @@
             const wrapper = document.getElementById('settings-import-status');
             const bar = document.getElementById('settings-import-progress-bar');
             const statusText = document.getElementById('settings-import-status-text');
+            if (!wrapper || !bar) return;
+            if (!isError) bar.style.width = '100%';
+            setTimeout(() => {
+                if (wrapper) wrapper.style.display = 'none';
+                if (statusText) statusText.textContent = '';
+            }, 700);
+        }
+
+        // Lightweight EPG progress helpers (separate from playlist progress)
+        function startSettingsEPGProgress() {
+            const container = document.getElementById('settings-epg-progress');
+            const wrapper = document.getElementById('settings-epg-import-status');
+            const statusText = document.getElementById('settings-epg-status-text');
+            if (!container || !wrapper) return;
+            container.style.width = '100%';
+            const bar = container.querySelector('.progress-bar');
+            if (bar) bar.style.width = '0%';
+            wrapper.style.display = 'block';
+            if (statusText) statusText.textContent = 'Starting...';
+        }
+
+        function updateSettingsEPGProgress(value, text) {
+            const bar = document.getElementById('settings-epg-progress-bar');
+            const statusText = document.getElementById('settings-epg-status-text');
+            if (!bar) return;
+            const clamped = Math.max(0, Math.min(100, value));
+            bar.style.width = clamped + '%';
+            if (statusText && typeof text === 'string') statusText.textContent = text;
+        }
+
+        function finishSettingsEPGProgress(isError) {
+            const wrapper = document.getElementById('settings-epg-import-status');
+            const bar = document.getElementById('settings-epg-progress-bar');
+            const statusText = document.getElementById('settings-epg-status-text');
             if (!wrapper || !bar) return;
             if (!isError) bar.style.width = '100%';
             setTimeout(() => {
